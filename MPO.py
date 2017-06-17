@@ -1,10 +1,8 @@
 import numpy as np
 from ast import literal_eval
-op2 = {'s0': np.array([[1, 0], [0, 1]], dtype='double'),
-       'sx': np.array([[0, 1], [1, 0]], dtype='double'),
-       'sy': np.array([[0, -1j], [1j, 0]], dtype='complex'),
-       'sz': np.array([[1, 0], [0, -1]], dtype='double')
-       }
+from pauli import sigma
+
+op2 = dict(zip(('s0', 'sx', 'sy', 'sz'), sigma))
 
 
 class MPO:
@@ -134,4 +132,3 @@ class MPO:
         new.N = self.N
         new.dim = self.dim
         return new
-# 数乘，整数幂
