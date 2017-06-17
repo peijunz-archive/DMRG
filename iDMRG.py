@@ -1,10 +1,12 @@
+'''iDMRG based on MPO and MPS
+
+Use MPO to solve ground state energy
+
+'''
 import numpy as np
 import scipy.sparse.linalg as SL
 import scipy.linalg as LA
 from MPO import MPO
-#--------------------------------------------------------------
-# Use MPO to solve ground state energy
-#--------------------------------------------------------------
 
 
 def halfshape(A):

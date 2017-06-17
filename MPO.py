@@ -1,3 +1,12 @@
+'''Matrix Product Operator
+
+Express the Hamiltonian of the system in terms of matrix product operator.
+
+Operators are implemented for automatic generation:
++ Addition of Hamiltonian terms is `+`
++ ⨂ Direct Product of Hamiltonian terms of nearing sites is `*`
+
+'''
 import numpy as np
 from ast import literal_eval
 from pauli import sigma

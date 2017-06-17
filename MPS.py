@@ -1,3 +1,8 @@
+'''Matrix product state class
+
+Infrastructure for DMRG and iTEBD
+
+'''
 import numpy as np
 import numpy.linalg as la
 from functools import reduce
