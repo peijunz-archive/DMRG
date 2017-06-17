@@ -1,8 +1,6 @@
-from numpy import zeros, array, einsum, tensordot, matmul
-import math
-from scipy.sparse.linalg import eigsh
-from numpy.linalg import eigh, norm, svd
-from scipy.sparse.linalg import svds
+import numpy as np
+import scipy.sparse.linalg as SL
+import scipy.linalg as LA
 from MPO import MPO
 #--------------------------------------------------------------
 # Use MPO to solve ground state energy
@@ -21,7 +19,7 @@ def halve(psi, sh, trunc=10):
     rsize = rsh[0] * rsh[1]
     A = psi.reshape([lsize, rsize])
     # Is A sparse?
-    U, S, V = svd(A, full_matrices=False)
+    U, S, V = LA.svd(A, full_matrices=False)
     if S.size > trunc:
         d = trunc
         U = U[:, :d]
@@ -35,12 +33,12 @@ def halve(psi, sh, trunc=10):
 
 def Hamiltonian(L, M, R):
     '''MPO Hamiltonian'''
-    return einsum('Aai, ijBb, jkCc, Ddk->ABCDabcd', L, M, M, R)
+    return np.einsum('Aai, ijBb, jkCc, Ddk->ABCDabcd', L, M, M, R)
 
 
 def matrixify(A):
     '''Conv tensor into matrix for svd'''
-    n = round(math.sqrt(A.size))
+    n = np.rint(np.sqrt(A.size)).astype(int)
     return A.reshape([n, n])
 
 
@@ -52,10 +50,10 @@ def next_LR(L, R, M):
     L上对U左，L下对U*左'''
     A = Hamiltonian(L, M, R)
     B = A.flatten()
-    val, vec = eigsh(matrixify(A), k=1, which='SA')
+    val, vec = SL.eigsh(matrixify(A), k=1, which='SA')
     U, S, V = halve(vec, halfshape(A))
-    L = einsum('ijk, ilA, jmB, kClm', L, U, U.conj(), M)
-    R = einsum('ijk, Ali, Bmj, Cklm', R, V, V.conj(), M)
+    L = np.einsum('ijk, ilA, jmB, kClm', L, U, U.conj(), M)
+    R = np.einsum('ijk, Ali, Bmj, Cklm', R, V, V.conj(), M)
     return L, R, val
 
 
@@ -64,9 +62,9 @@ if __name__ == "__main__":
     # Transverse Field Ising model H = - G * X_i + J * Z_i x Z_{i+1}
     #--------------------------------------------------------------
 
-    M = (-0.1 * MPO('sx') - MPO('sz')**2).tomatrix()
-    L = array([[[0, 0, 1]]])
-    R = array([[[1, 0, 0]]])
+    M = (- MPO('sx') - MPO('sz')**2).tomatrix()
+    L = np.array([[[0, 0, 1]]])
+    R = np.array([[[1, 0, 0]]])
 
     for i in range(40):
         L, R, val = next_LR(L, R, M)
