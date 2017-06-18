@@ -4,7 +4,7 @@ Infrastructure for DMRG and iTEBD
 
 '''
 import numpy as np
-import numpy.linalg as la
+import scipy.linalg as la
 from functools import reduce
 
 
@@ -103,8 +103,6 @@ class State:
             s = s[:ind]
             self.chi[i] = ind
         self.M[i] = v.reshape(after)
-        print(self.M[i].dtype, v.dtype)
-        print('After M = {}, v = {}'.format(self.M[i], v.reshape(after)))
         return u, s
 
     def ortho_left(self, cen=None):
@@ -123,7 +121,6 @@ class State:
         '''Go from the right end to right orthogonalize till center'''
         for i in range(self.L - 1, cen, -1):
             u, s = self.ortho_right_site(i)
-            print('-' * 30)
             s /= la.norm(s)
             self.lamb[i - 1] = s
             u *= s[np.newaxis, :]
@@ -135,7 +132,6 @@ class State:
         self.ortho_left()
         self.ortho_right()
         for i in range(0, self.L - 1):
-            print('Shape of M', self.M[i].shape)
             self.M[i] /= self.lamb[i][np.newaxis, np.newaxis, :]
         self.canonical = True
 
@@ -164,9 +160,9 @@ class State:
     def dot(self, rhs):
         '''Inner product between two wavefunctions'''
         assert self.dim == rhs.dim, "Shape conflict between states"
-        E = np.einsum('lcr, lcj->rj', self.S(0).conj(), rhs.S(0))
+        E = np.einsum('lcr, lcj->rj', self.A(0).conj(), rhs.A(0))
         for i in range(1, self.L):
-            E = np.einsum('kl, kno, lnr->or', E, self.S(i).conj(), rhs.S(i))
+            E = np.einsum('kl, kno, lnr->or', E, self.A(i).conj(), rhs.A(i))
         return np.trace(E)
 
     def wave(self):
@@ -200,11 +196,33 @@ class State:
                           E, self.A(i).conj(), op, self.A(i))
         return np.einsum('ii, i', E, self.lamb[i]**2).real
 
-    def update(U, *sites):
-        '''Apply U at sites, there are 2*len(sites) axes in U'''
-        assert(len(sites) * 2 == len(U.shape))
-        if sites:
-            pass
+    def update_su(self, U, site, unitary=True):
+        '''Apply U at sites, there are 2*len(sites) axes in U
+
+        + For unitary update, no need to affect boundary.
+        + For virtual time, exp(-tau*H) is no longer unitary
+        '''
+        # unitary:
+        self.M[site] = np.einsum('lcr, dc->ldr', self.M[site], U)
+        return self
+
+    def update_du(self, U, site, unitary=True, chi=20):
+        '''Have not been tested'''
+        m=np.einsum('lcr, r, rjk, abcj->labk',
+                    self.A(site), self.lamb[site], self.B(site+1), U)
+        sh=m.shape
+        u, s, v=la.svd(m.reshape((sh[0]*sh[1], -1)))
+        if len(s) > chi:
+            u = u[:, :chi]
+            v = v[:chi]
+            s = s[:chi]
+            self.chi[i + 1] = ind
+        u=u.reshape((*sh[:2], -1))
+        v=v.reshape((-1, *sh[2:]))
+        self.M[site] = u/self.lamb[site-1][:, np.newaxis, np.newaxis]
+        self.M[site+1] = v/self.lamb[site+1][np.newaxis, np.newaxis, :]
+        self.lamb[site]=s/la.norm(s)
+        return self
 
 
 if __name__ == "__main__":
@@ -215,6 +233,15 @@ if __name__ == "__main__":
     # np.set_printoptions(precision=5)
     # s.canon()
     # s.dot(s)
-    r = State.naive([0, 1], [1, 0], [2, 3])
-    r.canon()
-    print(r.lamb)
+    s = State.naive([0, 1], [1, 0], [2, 3])
+    s.canon()
+    print(s.dot(s))
+    t=np.pi/2
+    n=20
+    o=la.expm(t/n*1j*np.kron(sigma[3], sigma[3])).reshape([2,2,2,2])
+    print(o)
+    for i in range(n):
+        s.update_du(o, 0)
+    print(s.M)
+    print(s.lamb)
+    print(s.dot(s))

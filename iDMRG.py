@@ -29,6 +29,7 @@ def halve(psi, sh, trunc=10):
     else:
         d = S.size
     U = U.reshape([*lsh, d])
+    print(U.shape)
     V = V.reshape([d, *rsh])
     return U, S, V
 
