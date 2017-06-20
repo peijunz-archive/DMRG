@@ -9,10 +9,11 @@ import scipy.linalg as la
 
 def svd_cut(m, err=1e-16, x=20):
     u, s, v = la.svd(m, full_matrices=False)
-    s /= la.norm(s)
     ind = sum(np.abs(s) > err)
     ind = min(ind, x)
-    return u[:, :ind], s[:ind], v[:ind]
+    s = s[:ind]
+    s /= la.norm(s)
+    return u[:, :ind], s, v[:ind]
 
 
 class State:
