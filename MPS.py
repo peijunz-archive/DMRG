@@ -43,8 +43,8 @@ class State:
         self.M.append(
             np.eye(self.x[0], dtype='complex').reshape(1, self.x[0], -1))
         self.s = np.zeros_like(self.x, dtype='object')
-        for i in range(self.L+1):
-            self.s[i]=np.ones(self.x[i], dtype='double')
+        for i in range(self.L + 1):
+            self.s[i] = np.ones(self.x[i], dtype='double')
         self.canonical = False
 
     def from_x(self, x):
@@ -143,10 +143,10 @@ class State:
         '''Decompose MPS into ΓΛΓΛΓΛΓΛΓ'''
         self.ortho_left()
         self.ortho_right()
-        #print(self.M)
-        #print(self.s)
-        #for i in range(0, self.L - 1):
-            #self.M[i] /= self.sr[i][np.newaxis, np.newaxis, :]
+        # print(self.M)
+        # print(self.s)
+        # for i in range(0, self.L - 1):
+        #self.M[i] /= self.sr[i][np.newaxis, np.newaxis, :]
         self.unify_end()
         self.canonical = True
 
@@ -158,7 +158,7 @@ class State:
 
     def A(self, i):
         '''Left Matrix after Orthonormalization'''
-        #print(self.sl[i])
+        # print(self.sl[i])
         return self.M[i] * self.sl[i][:, np.newaxis, np.newaxis]
 
     def B(self, i):
@@ -167,7 +167,8 @@ class State:
 
     def S(self, i):
         '''Center Matrix with both circles'''
-        return self.sl[i][:, np.newaxis, np.newaxis] * self.M[i] * self.sr[i][np.newaxis, np.newaxis, :]
+        return (self.sl[i][:, np.newaxis, np.newaxis] *
+                self.M[i] * self.sr[i][np.newaxis, np.newaxis, :])
 
     def verify_shape(self):
         '''Verify that x is compatible with M'''
@@ -221,8 +222,8 @@ class State:
         '''Apply U at single site'''
         self.M[site] = np.einsum('lcr, dc->ldr', self.M[site], U)
         if not unitary:
-            self.ortho_right(site, site-1)
-            self.ortho_left(site, site+1)
+            self.ortho_right(site, site - 1)
+            self.ortho_left(site, site + 1)
         return self
 
     def update_double(self, U, site, unitary=True, x=20):
@@ -242,9 +243,8 @@ class State:
             self.M[site] = u / self.sl[site][:, np.newaxis, np.newaxis]
             self.M[site + 1] = v / self.sr[site + 1][np.newaxis, np.newaxis, :]
         else:
-            self.ortho_right(site, site-1)
-            self.ortho_left(site+1, site+2)
-            pass
+            self.ortho_right(site, site - 1)
+            self.ortho_left(site + 1, site + 2)
         return self
 
     def slice():
@@ -254,44 +254,3 @@ class State:
     def copy():
         # TODO
         pass
-
-
-def test_canon():
-    s = State((1, 2, 1))
-    s.M[0][0, :, :] = np.array([[1, 2 + 1j], [9j, 6j]])
-    s.M[1][:, :, 0] = np.array([[- 1j, 2 - 3j], [0.3, 4]])
-    #s.M[1][:, :, 1] = np.array([[5 - 1j, 2 - 3j], [0.3, 4]])
-    np.set_printoptions(precision=5)
-    print('Test Canon')
-    print(s)
-    s.canon()
-    print(s.M, sep='\n')
-    print(s.s, sep='\n')
-    print(s.dot(s))
-
-
-def two_body():
-    '''For Hamiltonian, the eigenvec is ++, +-, -+, --'''
-    from pauli import sigma
-    print('Test two body')
-    s = State.naive([1, 1], [1, 1])
-    eig_states = [[[0, 1], [0, 1]],
-                  [[0, 1], [1, 0]],
-                  [[1, 0], [0, 1]],
-                  [[1, 0], [1, 0]]]
-    s.canon()
-    t = np.pi
-    n = 20
-    o = la.expm(t / n * 1j * np.kron(sigma[3], sigma[3])).reshape([2, 2, 2, 2])
-    for i in range(n + 1):
-        L = np.array([s[eig_states[i]] for i in range(4)])
-        print('i =', i)
-        print(np.abs(L))
-        print(np.angle(L))
-        print('Measurement of Hamiltonian:', s.measure((0, sigma[3]), (1, sigma[3])))
-        s.update_double(o, 0)
-
-
-if __name__ == "__main__":
-    test_canon()
-    two_body()
