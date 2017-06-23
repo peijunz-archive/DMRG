@@ -5,9 +5,9 @@ Infrastructure for DMRG and iTEBD
 '''
 import numpy as np
 import scipy.linalg as la
+import copy
 
-
-def svd_cut(m, err=1e-16, x=20):
+def svd_cut(m, err=1e-10, x=20):
     u, s, v = la.svd(m, full_matrices=False)
     ind = sum(np.abs(s) > err)
     ind = min(ind, x)
@@ -33,11 +33,11 @@ class State:
         some boundaries open, for example x[n] > 1, then there is a series of MPS,
         which may be used to construct some other MPS by contraction.
         '''
-        self.dim = dim
+        #self.dim = dim
         if isinstance(arg[0], np.ndarray):
             self.from_M(arg)
         else:
-            self.from_x(arg)
+            self.from_x(arg, dim)
         self.M.append(
             np.eye(self.x[-1], dtype='complex').reshape(self.x[-1], -1, 1))
         self.M.append(
@@ -47,7 +47,8 @@ class State:
             self.s[i] = np.ones(self.x[i], dtype='double')
         self.canonical = False
 
-    def from_x(self, x):
+    def from_x(self, x, dim):
+        self.dim = dim
         self.x = np.array(x, dtype='i8')
         self.L = len(x) - 1
         self.M = [np.zeros(self.shape(i), 'complex') for i in range(self.L)]
@@ -55,7 +56,11 @@ class State:
     def from_M(self, M):
         L = [m.shape[0] for m in M]
         R = [m.shape[-1] for m in M]
+        d = [m.shape[1] for m in M]
         assert L[1:] == R[:-1], "Incompatible matrices!"
+        for i in d:
+            assert i == d[0], "Incompatible shape!"
+        self.dim = d[0]
         L.append(R[-1])
         self.x = np.array(L, dtype='i8')
         self.M = [np.array(i, 'complex') for i in M]
@@ -247,10 +252,20 @@ class State:
             self.ortho_left(site + 1, site + 2)
         return self
 
-    def slice():
-        # TODO
-        pass
+    def dt_update(self, start, U, dt):
+        for i in range(start, self.L-1, 2):
+            self.update_double(U, i)
 
-    def copy():
-        # TODO
-        pass
+    def iTEBD_double(self, H, t, n=100):
+        '''Second Order Suzuki Trotter Expansion'''
+        dt=t/n
+        U = la.expm(1j * H * dt).reshape([self.dim]*4)
+        self.dt_update(0, U, dt/2)
+        for i in range(n-1):
+            self.dt_update(1, U, dt)
+            self.dt_update(0, U, dt)
+        self.dt_update(1, U, dt)
+        self.dt_update(0, U, dt/2)
+
+    def copy(self):
+        return copy.deepcopy(self)
