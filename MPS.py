@@ -7,6 +7,7 @@ import numpy as np
 import scipy.linalg as la
 import copy
 
+
 def svd_cut(m, err=1e-10, x=20):
     u, s, v = la.svd(m, full_matrices=False)
     ind = sum(np.abs(s) > err)
@@ -204,9 +205,10 @@ class State:
             self.M.append(m)
             self.x.append(l2)
 
-    def measure(self, *ops):
+    def corr(self, *ops):
         '''oplist should be a list of ordered operators applied sequentially like
-        (4, sigma[3]), (6, sigma[2])
+        (4, sigma[3]), (6, sigma[2]), (7, sigma[1]), which means
+        E[Z_3*Y_6*X_7]
 
         TODO More complicated operators?
         '''
@@ -215,13 +217,20 @@ class State:
         E = np.eye(self.xl[x], dtype='complex')
         for i, op in ops:
             if x < i:
-                for j in range(x, j):
+                for j in range(x, i):
                     E = np.einsum('kl, kio, lir->or',
-                                  E, self.A(i).conj(), self.A(i))
+                                  E, self.A(j).conj(), self.A(j))
             x = i + 1
             E = np.einsum('kl, kio, ij, ljr->or',
                           E, self.A(i).conj(), op, self.A(i))
         return np.einsum('ii, i', E, self.sr[i]**2).real
+
+    def measure(self, site, op, n=2):
+        s = self.S(site)
+        for i in range(1, n):
+            s = np.einsum('abc, cde->abde', s, self.B(site + 1))
+            s = s.reshape(s.shape[0], -1, s.shape[-1])
+        return np.einsum('abd, aed, be', s, s.conj(), op).real
 
     def update_single(self, U, site, unitary=True):
         '''Apply U at single site'''
@@ -253,19 +262,19 @@ class State:
         return self
 
     def dt_update(self, start, U, dt):
-        for i in range(start, self.L-1, 2):
+        for i in range(start, self.L - 1, 2):
             self.update_double(U, i)
 
     def iTEBD_double(self, H, t, n=100):
         '''Second Order Suzuki Trotter Expansion'''
-        dt=t/n
-        U = la.expm(1j * H * dt).reshape([self.dim]*4)
-        self.dt_update(0, U, dt/2)
-        for i in range(n-1):
+        dt = t / n
+        U = la.expm(-1j * H * dt).reshape([self.dim] * 4)
+        self.dt_update(0, U, dt / 2)
+        for i in range(n - 1):
             self.dt_update(1, U, dt)
             self.dt_update(0, U, dt)
         self.dt_update(1, U, dt)
-        self.dt_update(0, U, dt/2)
+        self.dt_update(0, U, dt / 2)
 
     def copy(self):
         return copy.deepcopy(self)

@@ -5,6 +5,7 @@ from MPS import State
 import spin
 from MPO import MPO as O
 
+
 class TestMPS(unittest.TestCase):
     def testCanon(self):
         '''Test unity of state and circle matrix s after'''
@@ -31,21 +32,24 @@ class TestMPS(unittest.TestCase):
         s = State.naive([3, -1 + 5j], [1j, 1])
         eig_states = [[[0, 1], [0, 1]], [[0, 1], [1, 0]],
                       [[1, 0], [0, 1]], [[1, 0], [1, 0]]]
-        eig_vals = np.array([1, -1, -1, 1])/4
+        eig_vals = np.array([1, -1, -1, 1]) / 4
         s.canon()
         n = 20
         U = la.expm(np.pi / n * 1j *
-                    np.kron(spin.sz(), spin.sz())).reshape([2, 2, 2, 2])
+                    np.kron(spin.Z(), spin.Z())).reshape([2, 2, 2, 2])
         phi = np.exp(np.pi / n * 1j * eig_vals)
         L0 = np.array([s[eig_states[j]] for j in range(4)])
-        H0 = s.measure((0, spin.sz()), (1, spin.sz()))
+        H0 = s.corr((0, spin.Z()), (1, spin.Z()))
         for i in range(n):
             s.update_double(U, 0)
-            self.assertAlmostEqual(H0, s.measure((0, spin.sz()), (1, spin.sz())))
+            self.assertAlmostEqual(H0, s.corr((0, spin.Z()), (1, spin.Z())))
             L = np.array([s[eig_states[j]] for j in range(4)])
             L0 *= phi
             self.assertAlmostEqual(la.norm(L - L0), 0)
         return True
+
+    def testAKLT(self):
+        pass
 
 
 if __name__ == "__main__":
