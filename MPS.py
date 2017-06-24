@@ -116,10 +116,11 @@ class State:
         for i in range(left, right):
             before = (-1, self.xr[i])
             after = (self.xl[i], self.dim, -1)
-            u, s, v = svd_cut(self.S(i).reshape(before))
+            u, s, v = svd_cut(self.M[i].reshape(before))
             self.xr[i] = len(s)
             self.sr[i] = s
-            self.M[i] = u.reshape(after) / self.sl[i][:, np.newaxis, np.newaxis]
+            self.M[i] = u.reshape(after)
+            v *= s[:, np.newaxis]
             self.M[i + 1] = np.einsum('al, lcr->acr', v, self.M[i + 1])
         self.verify_shape()
 
@@ -130,10 +131,11 @@ class State:
         for i in range(right, left, -1):
             before = (self.xl[i], -1)
             after = (-1, self.dim, self.xr[i])
-            u, s, v = svd_cut(self.S(i).reshape(before))
+            u, s, v = svd_cut(self.M[i].reshape(before))
             self.xl[i] = len(s)
             self.sl[i] = s
-            self.M[i] = v.reshape(after) / self.sr[i][np.newaxis, np.newaxis, :]
+            self.M[i] = v.reshape(after)
+            u *= self.sr[i][np.newaxis, :]
             self.M[i - 1] = np.einsum('lcr, ra->lca', self.M[i - 1], u)
         self.verify_shape()
 
@@ -149,32 +151,16 @@ class State:
         '''Decompose MPS into ΓΛΓΛΓΛΓΛΓ'''
         self.ortho_left()
         self.ortho_right()
-        # print(self.M)
-        # print(self.s)
-        # for i in range(0, self.L - 1):
-        #self.M[i] /= self.sr[i][np.newaxis, np.newaxis, :]
         self.unify_end()
         self.canonical = True
 
-    def Mat(self, i):
-        if self.canonical:
-            return self.A(i)
-        else:
-            return self.M[i]
-
-    def A(self, i):
-        '''Left Matrix after Orthonormalization'''
-        # print(self.sl[i])
-        return self.M[i] * self.sl[i][:, np.newaxis, np.newaxis]
-
     def B(self, i):
         '''Left Matrix after Orthonormalization'''
-        return self.M[i] * self.sr[i][np.newaxis, np.newaxis, :]
+        return self.M[i]
 
     def S(self, i):
         '''Center Matrix with both circles'''
-        return (self.sl[i][:, np.newaxis, np.newaxis] *
-                self.M[i] * self.sr[i][np.newaxis, np.newaxis, :])
+        return self.sl[i][:, np.newaxis, np.newaxis] * self.M[i]
 
     def verify_shape(self):
         '''Verify that x is compatible with M'''
@@ -188,10 +174,9 @@ class State:
     def dot(self, rhs):
         '''Inner product between two wavefunctions'''
         assert self.dim == rhs.dim, "Shape conflict between states"
-        E = np.einsum('lcr, lcj->rj', self.Mat(0).conj(), rhs.Mat(0))
+        E = np.einsum('lcr, lcj->rj', self.S(0).conj(), rhs.S(0))
         for i in range(1, self.L):
-            E = np.einsum('kl, kno, lnr->or', E,
-                          self.Mat(i).conj(), rhs.Mat(i))
+            E = np.einsum('kl, kno, lnr->or', E, self.B(i).conj(), rhs.B(i))
         return np.trace(E)
 
     def __getitem__(self, ind):
@@ -209,33 +194,32 @@ class State:
         '''oplist should be a list of ordered operators applied sequentially like
         (4, sigma[3]), (6, sigma[2]), (7, sigma[1]), which means
         E[Z_3*Y_6*X_7]
-
-        TODO More complicated operators?
         '''
         assert(self.canonical)
         x = ops[0][0]
-        E = np.eye(self.xl[x], dtype='complex')
+        E = np.diag(self.sr[i]**2, dtype='complex')
         for i, op in ops:
             if x < i:
                 for j in range(x, i):
                     E = np.einsum('kl, kio, lir->or',
-                                  E, self.A(j).conj(), self.A(j))
+                                  E, self.B(j).conj(), self.B(j))
             x = i + 1
             E = np.einsum('kl, kio, ij, ljr->or',
-                          E, self.A(i).conj(), op, self.A(i))
-        return np.einsum('ii, i', E, self.sr[i]**2).real
+                          E, self.B(i).conj(), op, self.B(i))
+        return np.trace(E)
 
     def measure(self, site, op, n=2):
         s = self.S(site)
         for i in range(1, n):
-            s = np.einsum('abc, cde->abde', s, self.B(site + 1))
+            s = np.einsum('abc, cde->abde', s, self.B(site + i))
             s = s.reshape(s.shape[0], -1, s.shape[-1])
-        return np.einsum('abd, aed, be', s, s.conj(), op).real
+        return np.einsum('abd, aed, be', s, s.conj(), op)
 
     def update_single(self, U, site, unitary=True):
         '''Apply U at single site'''
         self.M[site] = np.einsum('lcr, dc->ldr', self.M[site], U)
         if not unitary:
+            # TODO
             self.ortho_right(site, site - 1)
             self.ortho_left(site, site + 1)
         return self
@@ -245,10 +229,10 @@ class State:
 
         + For unitary update, no need to affect boundary.
         + For virtual time, exp(-tau*H) is no longer unitary'''
-        m = np.einsum('lcr, r, rjk, abcj->labk',
-                      self.A(site), self.sr[site], self.B(site + 1), U)
+        m = np.einsum('lcr, rjk, abcj->labk', self.S(site), self.B(site + 1), U)
         sh = m.shape
         u, s, v = svd_cut(m.reshape((sh[0] * sh[1], -1)))
+        # TODO
         self.xr[site] = len(s)
         u = u.reshape((*sh[:2], -1))
         v = v.reshape((-1, *sh[2:]))
@@ -257,6 +241,7 @@ class State:
             self.M[site] = u / self.sl[site][:, np.newaxis, np.newaxis]
             self.M[site + 1] = v / self.sr[site + 1][np.newaxis, np.newaxis, :]
         else:
+            # TODO
             self.ortho_right(site, site - 1)
             self.ortho_left(site + 1, site + 2)
         return self
