@@ -9,9 +9,9 @@ Operators are implemented for automatic generation:
 '''
 import numpy as np
 from ast import literal_eval
-import spin
+from spin import sigma
 
-op2 = dict(zip(('s0', 'sx', 'sy', 'sz'), spin.S()))
+op2 = dict(zip(('s0', 'sx', 'sy', 'sz'), sigma))
 
 
 class MPO:
