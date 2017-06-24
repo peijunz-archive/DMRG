@@ -48,8 +48,9 @@ def S(s=1 / 2):
     '''Spin matrices (S_0, S_x, S_y, S_z)'''
     return I(s), X(s), Y(s), Z(s)
 
+
 # Pauli σ Matrices
-sigma = (I(), 2*X(), 2*Y(), 2*Z())
+sigma = (I(), 2 * X(), 2 * Y(), 2 * Z())
 
 if __name__ == '__main__':
     print('Spin 1/2:')
