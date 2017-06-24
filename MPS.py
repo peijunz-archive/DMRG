@@ -196,7 +196,7 @@ class State:
         '''
         assert(self.canonical)
         x = ops[0][0]
-        E = np.diag(self.sr[i]**2, dtype='complex')
+        E = np.diag(self.sl[x]**2)
         for i, op in ops:
             if x < i:
                 for j in range(x, i):
