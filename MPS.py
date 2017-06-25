@@ -7,6 +7,8 @@ import numpy as np
 import scipy.linalg as la
 import copy
 
+nx = np.newaxis
+
 
 def svd_cut(m, err=1e-10, x=20):
     u, s, v = la.svd(m, full_matrices=False)
@@ -39,13 +41,11 @@ class State:
             self.from_M(arg)
         else:
             self.from_x(arg, dim)
-        self.M.append(
-            np.eye(self.x[-1], dtype='complex').reshape(self.x[-1], -1, 1))
-        self.M.append(
-            np.eye(self.x[0], dtype='complex').reshape(1, self.x[0], -1))
+        self.M.append(np.eye(self.x[-1])[:, :, nx])
+        self.M.append(np.eye(self.x[0])[nx])
         self.s = np.zeros_like(self.x, dtype='object')
         for i in range(self.L + 1):
-            self.s[i] = np.ones(self.x[i], dtype='double')
+            self.s[i] = np.ones(self.x[i])
         self.canonical = False
 
     def from_x(self, x, dim):
@@ -70,7 +70,9 @@ class State:
     @staticmethod
     def naive(*L):
         '''L is N*s matrix, x are ones'''
-        L = np.array(L).reshape([-1, 1, 2, 1])
+        if len(L) == 1:
+            L = L[0]
+        L = np.array(L)[:, nx, :, nx]
         return State(L)
 
     def shape(self, i):
@@ -120,7 +122,7 @@ class State:
             self.xr[i] = len(s)
             self.sr[i] = s
             self.M[i] = u.reshape(after)
-            v *= s[:, np.newaxis]
+            v *= s[:, nx]
             self.M[i + 1] = np.einsum('al, lcr->acr', v, self.M[i + 1])
         self.verify_shape()
 
@@ -135,7 +137,7 @@ class State:
             self.xl[i] = len(s)
             self.sl[i] = s
             self.M[i] = v.reshape(after)
-            u *= self.sr[i][np.newaxis, :]
+            u *= s[nx]
             self.M[i - 1] = np.einsum('lcr, ra->lca', self.M[i - 1], u)
         self.verify_shape()
 
@@ -146,13 +148,21 @@ class State:
         if self.xr[-1] == 1:
             self.M[self.L - 1] /= self.M[self.L][0, 0, 0]
             self.M[self.L][0, 0, 0] = 1
+        # for i in [-1, 0]:
+            #self.s[i] = np.ones(self.x[i])
 
     def canon(self):
         '''Decompose MPS into ΓΛΓΛΓΛΓΛΓ'''
         self.ortho_left()
+        self.M[self.L - 1] *= self.sr[-1][nx, nx]
         self.ortho_right()
         self.unify_end()
         self.canonical = True
+
+    def A(self, i):
+        '''For testing purpose only, DEPRECATED
+        '''
+        return self.sl[i][:, nx, nx] * self.M[i] / self.sr[i][nx, nx]
 
     def B(self, i):
         '''Left Matrix after Orthonormalization'''
@@ -160,16 +170,16 @@ class State:
 
     def S(self, i):
         '''Center Matrix with both circles'''
-        return self.sl[i][:, np.newaxis, np.newaxis] * self.M[i]
+        return self.sl[i][:, nx, nx] * self.M[i]
 
     def verify_shape(self):
         '''Verify that x is compatible with M'''
         # print(self.M)
         for i in range(self.L):
-            expect = self.shape(i)
+            expt = self.shape(i)
             got = self.M[i].shape
-            assert expect == got, 'Shape error at {}, expected {}, got {}'.format(
-                i, expect, got)
+            m = 'Shape error at {}, expected {}, got {}'.format(i, expt, got)
+            assert expt == got, m
 
     def dot(self, rhs):
         '''Inner product between two wavefunctions'''
@@ -229,17 +239,17 @@ class State:
 
         + For unitary update, no need to affect boundary.
         + For virtual time, exp(-tau*H) is no longer unitary'''
-        m = np.einsum('lcr, rjk, abcj->labk', self.S(site), self.B(site + 1), U)
+        mb = np.einsum('lcr, rjk, abcj->labk', self.B(site), self.B(site + 1), U)
+        m = self.xl[site, nx, nx, nx] * mb
         sh = m.shape
         u, s, v = svd_cut(m.reshape((sh[0] * sh[1], -1)))
-        # TODO
         self.xr[site] = len(s)
         u = u.reshape((*sh[:2], -1))
         v = v.reshape((-1, *sh[2:]))
         self.sr[site] = s
         if unitary:
-            self.M[site] = u / self.sl[site][:, np.newaxis, np.newaxis]
-            self.M[site + 1] = v / self.sr[site + 1][np.newaxis, np.newaxis, :]
+            self.M[site] = np.einsum('ijkl, mkl->ijm', mb, v.conj())
+            self.M[site + 1] = v
         else:
             # TODO
             self.ortho_right(site, site - 1)

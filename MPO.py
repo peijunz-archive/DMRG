@@ -10,6 +10,7 @@ Operators are implemented for automatic generation:
 import numpy as np
 from ast import literal_eval
 from spin import sigma
+import copy
 
 op2 = dict(zip(('s0', 'sx', 'sy', 'sz'), sigma))
 
@@ -132,12 +133,4 @@ class MPO:
         return ret
 
     def copy(self):
-        new = MPO()
-        new.x = self.x.copy()
-        new.y = self.y.copy()
-        new.op = self.op.copy()
-        new.name = self.name.copy()
-        new.dof = self.dof
-        new.N = self.N
-        new.dim = self.dim
-        return new
+        return copy.deepcopy(self)
