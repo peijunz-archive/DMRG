@@ -3,6 +3,7 @@
 Infrastructure for DMRG and iTEBD
 
 '''
+import math
 import numpy as np
 import scipy.linalg as la
 import copy
@@ -80,8 +81,14 @@ class State:
         '''L is N*s matrix, x are ones'''
         if len(L) == 1:
             L = L[0]
+        if isinstance(L[0], int):
+            L = [(1, -1) if np.isinf(i) else (i, 1-i) for i in L]
         L = np.array(L)[:, nx, :, nx]
         return State(L)
+
+    def __getitem__(self, ind):
+        '''(1-i)/i=1/i-1=a*exp(it), i=1/(1+a*exp(it))'''
+        return State.naive(ind).dot(self)
 
     def shape(self, i):
         return self.xl[i], self.dim, self.xr[i]
@@ -104,11 +111,11 @@ class State:
         return self.graph()
 
     @property
-    def sl(self):
+    def Sl(self):
         return self.s[:-1]
 
     @property
-    def sr(self):
+    def Sr(self):
         return self.s[1:]
 
     @property
@@ -124,13 +131,13 @@ class State:
         # Preparing work
         before = (-1, self.xr[i])
         after = (self.xl[i], self.dim, -1)
-        self.M[i] *= self.sl[i][:, nx, nx]
+        self.M[i] *= self.Sl[i][:, nx, nx]
         # SVD
         u, s, v = svd_cut(self.M[i].reshape(before))
         # Post job
         self.M[i] = u.reshape(after)
         self.xr[i] = len(s)
-        self.sr[i] = s
+        self.Sr[i] = s
         self.M[i + 1] = np.einsum('al, lcr->acr', v, self.M[i + 1])
 
     def ortho_right_site(self, i):
@@ -138,13 +145,13 @@ class State:
         # Preparing work
         before = (self.xl[i], -1)
         after = (-1, self.dim, self.xr[i])
-        self.M[i] *= self.sr[i][nx, nx]
+        self.M[i] *= self.Sr[i][nx, nx]
         # SVD
         u, s, v = svd_cut(self.M[i].reshape(before))
         # Post job
-        self.xl[i] = len(s)
-        self.sl[i] = s
         self.M[i] = v.reshape(after)
+        self.xl[i] = len(s)
+        self.Sl[i] = s
         self.M[i - 1] = np.einsum('lcr, ra->lca', self.M[i - 1], u)
 
     def unify_end(self):
@@ -166,12 +173,19 @@ class State:
         self.canonical = True
 
     def B(self, i):
-        '''Left Matrix after Orthonormalization'''
+        '''Matrix after Orthonormalization'''
         return self.M[i]
 
-    def S(self, i):
+    def block_single(self, i):
         '''Center Matrix with both circles'''
-        return self.sl[i][:, nx, nx] * self.M[i]
+        return self.Sl[i][:, nx, nx] * self.M[i]
+
+    def block(self, start, n):
+        s = self.block_single(start)
+        for i in range(start+1, start+n):
+            s = np.einsum('abc, cde->abde', s, self.B(i))
+            s = s.reshape(s.shape[0], -1, s.shape[-1])
+        return s
 
     def verify_shape(self):
         '''Verify that x is compatible with M'''
@@ -185,79 +199,65 @@ class State:
     def dot(self, rhs):
         '''Inner product between two wavefunctions'''
         assert self.dim == rhs.dim, "Shape conflict between states"
-        E = np.einsum('lcr, lcj->rj', self.S(0).conj(), rhs.S(0))
+        E = np.einsum('lcr, lcj->rj', self.block_single(0).conj(), rhs.block_single(0))
         for i in range(1, self.L):
             E = np.einsum('kl, kno, lnr->or', E, self.B(i).conj(), rhs.B(i))
         return np.trace(E)
 
-    def __getitem__(self, ind):
-        '''Bloch Wave function for each site'''
-        return State.naive(ind).dot(self)
-
-    def __add__(self, m):
-        '''DEPRECATED'''
-        l, d, r = m.shape
-        if d == self.dim and l == self.x[-1]:
-            self.M.append(m)
-            self.x.append(l2)
-
     def corr(self, *ops):
         '''oplist should be a list of ordered operators applied sequentially like
         (4, sigma[3]), (6, sigma[2]), (7, sigma[1]), which means
-        E[Z_3*Y_6*X_7]
+        E[Z_4*Y_6*X_7]
         '''
         assert(self.canonical)
-        x = ops[0][0]
-        E = np.diag(self.sl[x]**2)
-        for i, op in ops:
-            if x < i:
-                for j in range(x, i):
-                    E = np.einsum('kl, kio, lir->or',
-                                  E, self.B(j).conj(), self.B(j))
-            x = i + 1
-            E = np.einsum('kl, kio, ij, ljr->or',
-                          E, self.B(i).conj(), op, self.B(i))
+        D = dict(ops)
+        start, end = min(D.keys()), max(D.keys())+1
+        E = np.diag(self.Sl[start]**2)
+        for i in range(start, end):
+            b=self.B(i)
+            if i in D:
+                E = np.einsum('kl, kio, ij, ljr->or', E, b.conj(), D[i], b)
+            else:
+                E = np.einsum('kl, kio, lir->or', E, b.conj(), b)
         return np.trace(E)
 
-    def measure(self, site, op, n=2):
-        s = self.S(site)
-        for i in range(1, n):
-            s = np.einsum('abc, cde->abde', s, self.B(site + i))
-            s = s.reshape(s.shape[0], -1, s.shape[-1])
+    def measure(self, start, op):
+        n = round(math.log(op.size, self.dim)/2)
+        s = self.block(start, n)
         return np.einsum('abd, aed, be', s, s.conj(), op)
 
     def update_single(self, U, i, unitary=True):
-        '''Apply U at single site i
-        + For non unitary case, if we update from left to right, then we
-        can easily make it left orthogonalized, but not right.
-        + After one run, we should R-orthogonalize the chain.
-        '''
+        '''Apply U at single site i'''
         self.M[i] = np.einsum('lcr, dc->ldr', self.M[i], U)
         if not unitary:
             self.ortho_left_site(i)
-        return self
 
-    def update_double(self, U, i, unitary=True, x=20):
+    def update_double(self, U, i, unitary=True):
         '''Double site i, i+1 ?unitary update
 
         + For unitary update, no need to affect boundary.
-        + For virtual time, exp(-tau*H) is no longer unitary. Update site i+1'''
+        + For virtual time, exp(-tau*H) is no longer unitary. Update site i+1
+            + For non unitary case, if we update from left to right, then we
+              can easily make it left orthogonalized, but not right.
+            + After one run from L to R, we should R-orthogonalize the chain.'''
         mb = np.einsum('lcr, rjk, abcj->labk', self.B(i), self.B(i + 1), U)
-        m = self.xl[i, nx, nx, nx] * mb
+        m = self.Sl[i][:, nx, nx, nx] * mb
         sh = m.shape
         u, s, v = svd_cut(m.reshape(sh[0] * sh[1], -1))
         self.xr[i] = len(s)
         u = u.reshape(*sh[:2], -1)
         v = v.reshape(-1, *sh[2:])
-        self.sr[i] = s
-        if unitary:
-            self.M[i] = np.einsum('ijkl, mkl->ijm', mb, v.conj())
-            self.M[i + 1] = v
-        else:
+        self.Sr[i] = s
+        self.M[i] = np.einsum('ijkl, mkl->ijm', mb, v.conj())
+        self.M[i + 1] = v
+        if not unitary:
             self.ortho_left_site(i + 1)
-        return self
 
-    def dt_update_from(self, start, U, dt):
+    def update_k(self, U, i, k, unitary=True):
+        '''General multiple sites update'''
+        pass
+
+    def run_from(self, start, U, dt):
         for i in range(start, self.L - 1, 2):
             self.update_double(U, i)
 
@@ -265,12 +265,12 @@ class State:
         '''Second Order Suzuki Trotter Expansion'''
         dt = t / n
         U = la.expm(-1j * H * dt).reshape([self.dim] * 4)
-        self.dt_update_from(0, U, dt / 2)
+        self.run_from(0, U, dt / 2)
         for i in range(n - 1):
-            self.dt_update_from(1, U, dt)
-            self.dt_update_from(0, U, dt)
-        self.dt_update_from(1, U, dt)
-        self.dt_update_from(0, U, dt / 2)
+            self.run_from(1, U, dt)
+            self.run_from(0, U, dt)
+        self.run_from(1, U, dt)
+        self.run_from(0, U, dt / 2)
 
     def copy(self):
         return copy.deepcopy(self)
