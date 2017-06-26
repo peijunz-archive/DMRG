@@ -48,10 +48,10 @@ def evolve(s, time=0.1, n=5):
 if __name__ == "__main__":
     N = 12
     s = AKLT_State(N)
-    k = N // 2
+    k = (N - 1) // 2
     E = Energy(s)
-    zcorr = np.array([s.corr(*zz_op(k, i)) for i in range(k + 1, N)])
-    string = np.array([s.corr(*string_op(k, i)) for i in range(k + 2, N)])
+    zcorr = np.array([s.corr(*zz_op(k, i)) for i in range(k + 1, N)]).real
+    string = np.array([s.corr(*string_op(k, i)) for i in range(k + 2, N)]).real
     if N < 13:
         print("State\n{}".format(s))
     print('Total Energy is {}, mean energy each bond is {}'.format(E, E / (N - 1)))

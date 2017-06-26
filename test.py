@@ -17,11 +17,12 @@ class TestMPS(unittest.TestCase):
         for i in s.s:
             self.assertAlmostEqual(la.norm(i), 1, msg='Non-unitary s matrix')
         for i in range(s.L):
-            TAA = np.einsum("ijk, ijn->kn", s.A(i).conj(), s.A(i))
-            BBT = np.einsum("ijk, ljk->il", s.B(i), s.B(i).conj())
-            self.assertAlmostEqual(la.norm(TAA - np.eye(s.xr[i])), 0,
+            S = s.S(i)
+            TSS = np.einsum("ijk, ijn->kn", S.conj(), S)
+            SST = np.einsum("ijk, ljk->il", S, S.conj())
+            self.assertAlmostEqual(la.norm(TSS - np.diag(s.sr[i])**2), 0,
                                    msg="Left orthonormalization failed")
-            self.assertAlmostEqual(la.norm(BBT - np.eye(s.xl[i])), 0,
+            self.assertAlmostEqual(la.norm(SST - np.diag(s.sl[i])**2), 0,
                                    msg="Right orthonormalization failed")
         return True
 

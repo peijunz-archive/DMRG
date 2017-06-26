@@ -9,14 +9,18 @@ import copy
 
 nx = np.newaxis
 
-
-def svd_cut(m, err=1e-10, x=20):
-    u, s, v = la.svd(m, full_matrices=False)
+def cut(s, err=1e-10, x=20):
+    s /= s[0]
     ind = sum(np.abs(s) > err)
     ind = min(ind, x)
     s = s[:ind]
     s /= la.norm(s)
-    return u[:, :ind], s, v[:ind]
+    return s, ind
+
+def svd_cut(m, err=1e-10, x=20):
+    u, s, v = la.svd(m, full_matrices=False)
+    s, k = cut(s, err, x)
+    return u[:, :k], s, v[:k]
 
 
 class State:
@@ -159,11 +163,6 @@ class State:
         self.unify_end()
         self.canonical = True
 
-    def A(self, i):
-        '''For testing purpose only, DEPRECATED
-        '''
-        return self.sl[i][:, nx, nx] * self.M[i] / self.sr[i][nx, nx]
-
     def B(self, i):
         '''Left Matrix after Orthonormalization'''
         return self.M[i]
@@ -242,10 +241,10 @@ class State:
         mb = np.einsum('lcr, rjk, abcj->labk', self.B(site), self.B(site + 1), U)
         m = self.xl[site, nx, nx, nx] * mb
         sh = m.shape
-        u, s, v = svd_cut(m.reshape((sh[0] * sh[1], -1)))
+        u, s, v = svd_cut(m.reshape(sh[0] * sh[1], -1))
         self.xr[site] = len(s)
-        u = u.reshape((*sh[:2], -1))
-        v = v.reshape((-1, *sh[2:]))
+        u = u.reshape(*sh[:2], -1)
+        v = v.reshape(-1, *sh[2:])
         self.sr[site] = s
         if unitary:
             self.M[site] = np.einsum('ijkl, mkl->ijm', mb, v.conj())
