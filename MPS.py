@@ -9,6 +9,7 @@ import copy
 
 nx = np.newaxis
 
+
 def cut(s, err=1e-10, x=20):
     s /= s[0]
     ind = sum(np.abs(s) > err)
@@ -16,6 +17,7 @@ def cut(s, err=1e-10, x=20):
     s = s[:ind]
     s /= la.norm(s)
     return s, ind
+
 
 def svd_cut(m, err=1e-10, x=20):
     u, s, v = la.svd(m, full_matrices=False)
@@ -27,7 +29,10 @@ class State:
     '''Length:
     + o --- L+1: 0~L
     + x --- L+1: 0~L
-    + v --- L+2: (-1), 0, 1,..., L-1, (L)'''
+    + v --- L+2: (-1), 0, 1,..., L-1, (L)
+
+    TODO Periodic boundary condition?
+    '''
 
     def __init__(self, arg=(1, 1), dim=2):
         '''
@@ -48,8 +53,7 @@ class State:
         self.M.append(np.eye(self.x[-1])[:, :, nx])
         self.M.append(np.eye(self.x[0])[nx])
         self.s = np.zeros_like(self.x, dtype='object')
-        for i in range(self.L + 1):
-            self.s[i] = np.ones(self.x[i])
+        self.s[0] = np.ones(self.x[0])
         self.canonical = False
 
     def from_x(self, x, dim):
@@ -115,51 +119,49 @@ class State:
     def xr(self):
         return self.x[1:]
 
-    def ortho_left(self, left=0, right=None):
-        '''Left orthogonalization from the left end untill right end [)'''
-        if right is None:
-            right = self.L
-        for i in range(left, right):
-            before = (-1, self.xr[i])
-            after = (self.xl[i], self.dim, -1)
-            u, s, v = svd_cut(self.M[i].reshape(before))
-            self.xr[i] = len(s)
-            self.sr[i] = s
-            self.M[i] = u.reshape(after)
-            v *= s[:, nx]
-            self.M[i + 1] = np.einsum('al, lcr->acr', v, self.M[i + 1])
-        self.verify_shape()
+    def ortho_left_site(self, i):
+        '''Left orthogonalization'''
+        # Preparing work
+        before = (-1, self.xr[i])
+        after = (self.xl[i], self.dim, -1)
+        self.M[i] *= self.sl[i][:, nx, nx]
+        # SVD
+        u, s, v = svd_cut(self.M[i].reshape(before))
+        # Post job
+        self.M[i] = u.reshape(after)
+        self.xr[i] = len(s)
+        self.sr[i] = s
+        self.M[i + 1] = np.einsum('al, lcr->acr', v, self.M[i + 1])
 
-    def ortho_right(self, right=None, left=-1):
-        '''Right orthogonalization from the left end untill right end (]'''
-        if right is None:
-            right = self.L - 1
-        for i in range(right, left, -1):
-            before = (self.xl[i], -1)
-            after = (-1, self.dim, self.xr[i])
-            u, s, v = svd_cut(self.M[i].reshape(before))
-            self.xl[i] = len(s)
-            self.sl[i] = s
-            self.M[i] = v.reshape(after)
-            u *= s[nx]
-            self.M[i - 1] = np.einsum('lcr, ra->lca', self.M[i - 1], u)
-        self.verify_shape()
+    def ortho_right_site(self, i):
+        '''Right orthogonalization'''
+        # Preparing work
+        before = (self.xl[i], -1)
+        after = (-1, self.dim, self.xr[i])
+        self.M[i] *= self.sr[i][nx, nx]
+        # SVD
+        u, s, v = svd_cut(self.M[i].reshape(before))
+        # Post job
+        self.xl[i] = len(s)
+        self.sl[i] = s
+        self.M[i] = v.reshape(after)
+        self.M[i - 1] = np.einsum('lcr, ra->lca', self.M[i - 1], u)
 
     def unify_end(self):
+        '''Remove possible exp(it) in auxillary M[-1] and M[L]'''
         if self.xl[0] == 1:
             self.M[0] /= self.M[-1][0, 0, 0]
             self.M[-1][0, 0, 0] = 1
         if self.xr[-1] == 1:
             self.M[self.L - 1] /= self.M[self.L][0, 0, 0]
             self.M[self.L][0, 0, 0] = 1
-        # for i in [-1, 0]:
-            #self.s[i] = np.ones(self.x[i])
 
     def canon(self):
         '''Decompose MPS into ΓΛΓΛΓΛΓΛΓ'''
-        self.ortho_left()
-        self.M[self.L - 1] *= self.sr[-1][nx, nx]
-        self.ortho_right()
+        for i in range(self.L):
+            self.ortho_left_site(i)
+        for i in reversed(range(self.L)):
+            self.ortho_right_site(i)
         self.unify_end()
         self.canonical = True
 
@@ -224,38 +226,38 @@ class State:
             s = s.reshape(s.shape[0], -1, s.shape[-1])
         return np.einsum('abd, aed, be', s, s.conj(), op)
 
-    def update_single(self, U, site, unitary=True):
-        '''Apply U at single site'''
-        self.M[site] = np.einsum('lcr, dc->ldr', self.M[site], U)
+    def update_single(self, U, i, unitary=True):
+        '''Apply U at single site i
+        + For non unitary case, if we update from left to right, then we
+        can easily make it left orthogonalized, but not right.
+        + After one run, we should R-orthogonalize the chain.
+        '''
+        self.M[i] = np.einsum('lcr, dc->ldr', self.M[i], U)
         if not unitary:
-            # TODO
-            self.ortho_right(site, site - 1)
-            self.ortho_left(site, site + 1)
+            self.ortho_left_site(i)
         return self
 
-    def update_double(self, U, site, unitary=True, x=20):
-        '''Double site ?unitary update
+    def update_double(self, U, i, unitary=True, x=20):
+        '''Double site i, i+1 ?unitary update
 
         + For unitary update, no need to affect boundary.
-        + For virtual time, exp(-tau*H) is no longer unitary'''
-        mb = np.einsum('lcr, rjk, abcj->labk', self.B(site), self.B(site + 1), U)
-        m = self.xl[site, nx, nx, nx] * mb
+        + For virtual time, exp(-tau*H) is no longer unitary. Update site i+1'''
+        mb = np.einsum('lcr, rjk, abcj->labk', self.B(i), self.B(i + 1), U)
+        m = self.xl[i, nx, nx, nx] * mb
         sh = m.shape
         u, s, v = svd_cut(m.reshape(sh[0] * sh[1], -1))
-        self.xr[site] = len(s)
+        self.xr[i] = len(s)
         u = u.reshape(*sh[:2], -1)
         v = v.reshape(-1, *sh[2:])
-        self.sr[site] = s
+        self.sr[i] = s
         if unitary:
-            self.M[site] = np.einsum('ijkl, mkl->ijm', mb, v.conj())
-            self.M[site + 1] = v
+            self.M[i] = np.einsum('ijkl, mkl->ijm', mb, v.conj())
+            self.M[i + 1] = v
         else:
-            # TODO
-            self.ortho_right(site, site - 1)
-            self.ortho_left(site + 1, site + 2)
+            self.ortho_left_site(i + 1)
         return self
 
-    def dt_update(self, start, U, dt):
+    def dt_update_from(self, start, U, dt):
         for i in range(start, self.L - 1, 2):
             self.update_double(U, i)
 
@@ -263,12 +265,12 @@ class State:
         '''Second Order Suzuki Trotter Expansion'''
         dt = t / n
         U = la.expm(-1j * H * dt).reshape([self.dim] * 4)
-        self.dt_update(0, U, dt / 2)
+        self.dt_update_from(0, U, dt / 2)
         for i in range(n - 1):
-            self.dt_update(1, U, dt)
-            self.dt_update(0, U, dt)
-        self.dt_update(1, U, dt)
-        self.dt_update(0, U, dt / 2)
+            self.dt_update_from(1, U, dt)
+            self.dt_update_from(0, U, dt)
+        self.dt_update_from(1, U, dt)
+        self.dt_update_from(0, U, dt / 2)
 
     def copy(self):
         return copy.deepcopy(self)

@@ -4,8 +4,7 @@ import numpy as np
 import scipy.linalg as la
 
 ss = sum(np.kron(si, si) for si in spin.S(1)[1:])
-ss2 = ss@ss
-H = ss + ss2 / 3
+H = ss + ss @ ss / 3
 
 
 def AKLT_State(n=30):
