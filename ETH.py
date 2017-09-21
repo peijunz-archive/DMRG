@@ -1,15 +1,37 @@
+import numpy as np
 import scipy as sp
 import scipy.linalg as la
-import numpy as np
-from numpy import diag, trace, linspace, sqrt, tril, triu, zeros
-from numpy.random import randn
-from scipy.optimize import minimize
-from scipy.optimize import newton
-from spin import sigma
-from functools import reduce, partial
-from numpy.random import RandomState
-import Ising
+import scipy.optimize as opt
 
+from spin import sigma
+from functools import reduce
+from numpy.random import RandomState
+from Ising import nearest
+'''
+# Note Sep. 14
++ Done. Use Random State to seed and generate Random Hamiltonian/States
++ TODO Compare both partial $\rho$ and total $\rho$ of ETH and minimized one
++ Save data
++ Test the routine by eigen state with some random unitary transformation
++ Pade approximation
++ Cache some used quantity like $H^2$
++ Use iterative incremental $U=\prod e^{h_i}$
+'''
+def unity(A):
+    '''#DEPRECATED '''
+    L=np.tril(A, -1)
+    U=np.triu(A)
+    H=1j*(U+U.T)-(L-L.T)
+    return la.expm(H)
+
+def unityx(x):
+    '''#DEPRECATED '''
+    n=int(np.sqrt(x.size))
+    A=x.reshape(n,n)
+    L=np.tril(A, -1)
+    U=np.triu(A)
+    H=1j*(U+U.T)-(L-L.T)
+    return la.expm(H)
 
 def trmul(A, B):
     return np.sum(A*B.T)
@@ -19,105 +41,107 @@ def energy_var(H, rho, H2=None):
     if H2 is None:
         H2=H@H
     res=trmul(H2, rho)-trmul(H, rho)**2
+    #print("Var", trmul(H2, rho), trmul(H, rho))
     return res.real
 
 def Hamiltonian(n, delta, g):
     '''$H=-\sum (Z_iZ_j-\Delta X_iX_j)-g\sum X_i$'''
-    H=-Ising.nearest(n, sigma[1], coef=g)
-    H-=Ising.nearest(n, sigma[3], sigma[3])
-    H-=delta*Ising.nearest(n, sigma[1], sigma[1])
-    return H.todense()
+    H=-nearest(n, sigma[1], coef=g)
+    H-=nearest(n, sigma[3], sigma[3])
+    H-=delta*nearest(n, sigma[1], sigma[1])
+    return H
 
 # ===========
-
-def _B_Matrix(rho, H):
-    '''B=i(rho@H-H@rho)'''
-    B=1j*(rho@H)
-    B+=B.T.conj()
-    return B
-
+def commuteh(h1, h2):
+    '''[H1, H2]'''
+    M=h1@h2
+    M-=M.T.conj()
+    return M
 def gradient(H, rho, H2=None):
-    '''The gradient for rho'=exp(ih)@rho@exp(ih)'''
+    '''The gradient for rho'=exp(ih)@rho@exp(ih)
+
+    $$\frac{df(H)}{dx}=g'(H^2)-2g(H)g'(H)=\tr[M^2]$$
+
+    $$\frac{d^2f(H)}{dx^2}=g''(H^2)-2g'^2(H)-2g(H)g''(H)$$
+    '''
     if H2 is None:
         H2=H@H
-    coef=2*trmul(rho, H)
-    return _B_Matrix(rho, H2)-coef*_B_Matrix(rho, H)
-
-def minimize_var(fun, rho, H, eps=0.1):
-    H2 = H@H
-    for i in range(100):
-        print(fun(rho))
-        h = eps * gradient(H, rho, H2)
-        U = la.expm(1j*h)
-        rho = U@rho@U.T.conj()
-    return rho
+    gh = trmul(rho, H)
+    dh2 = H2-(2*gh)*H
+    M = 1j*commuteh(rho, dh2)
+    g1h = trmul(M, H)
+    mrho = commuteh(M, rho)
+    f1 = trmul(M, M)
+    f2 = trmul(mrho, commuteh(M, dh2)) - 2*g1h**2
+    return M, f1.real, f2.real
 
 # ============== ETH =====================
 def ETH_rho(H, b):
     '''rho for ETH state with given beta'''
     R=la.expm(-b*H)
-    return R/trace(R)
+    return R/np.trace(R)
 
 def ETH_energy(H, beta):
     '''Find energy'''
     return trmul(H, ETH_rho(H, beta)).real
 
 def ETH_beta(H, E):
-    return newton(lambda x:ETH_energy(H, x)-E, 0)
+    '''Find beta=1/kT'''
+    return opt.newton(lambda x:ETH_energy(H, x)-E, 0)
 
 def ETH_energy_var(H, x):
     return energy_var(H, ETH_rho(H, x))
 
-
-def optimize_varh(H, Rho):
-    '''The parameters should be represented by a array of size $n^2$
-    before optimized by `minimize`. `unity` with `reshape` will turn
-    it into a matrix thus give the variance of energy of $H$. Init
-    parameters of optimization is given by zeros which makes $U=I_n$'''
-    assert(H.shape==Rho.rho.shape)
-    n=H.shape[0]
-    def f(x):
-        U=unityx(x)
-        return varh(H, U@rho@U.T.conj())
-    print('Initial Var', f(zeros(n*n)))
-    res=minimize(f, zeros(n*n))
-    U=unityx(res.x)
-    return U@rho@U.T.conj(), res.fun
+def minimize_var(H, rho, meps=10, nit=100):
+    H2 = H@H
+    for i in range(nit):
+        print("Step {}, energy var {}".format(i, energy_var(H, rho, H2)))
+        M, f1, f2 = gradient(H, rho, H2)
+        if f2 < f1/meps:
+            x = meps
+        else:
+            x = f1/f2
+            print(f1, f2, x, x*np.sqrt(f1))
+        h1 = - x * M
+        U = la.expm(1j*h1)
+        rho = U@rho@U.T.conj()
+    print("Step {}, energy var {}".format(nit, energy_var(H, rho, H2)))
+    np.save('rho', rho)
+    return rho
 
 # ======== rho generation ==============
 def product_rho(*L):
     '''Generate rho by product of List of small ones'''
-    rho=reduce(sp.kron, L)
-    return sp.diag(rho/sum(rho))
+    rho=reduce(np.kron, L)
+    print(rho)
+    return np.diag(rho/sum(rho))
 
 def rand_rho(H, rs=None):
     '''Generate huge diagonal rho'''
     if rs is None:
         rs=RandomState(0)
     rho = abs(rs.randn(H.shape[0]))
-    rho/=sum(rho)
-    return sp.diag(rho)
+    rho /= sum(rho)
+    return np.diag(rho)
 
 def rand_rho_prod(n, rs=None):
     if rs is None:
         rs=RandomState(0)
     rhol = abs(rs.randn(n, 2)+1)
     rhol /= np.sum(rhol, axis=1)[:, np.newaxis]
-    print(rhol)
     return product_rho(*rhol)
 
 if __name__ == "__main__":
-    H4=Hamiltonian(4, 1/2, 1/2)
-    rho = rand_rho_prod(4)
-    E=trmul(rho, H4).real
-    b=beta(H4, E)
-    print('Initial\nEnergy = {}, β = {}'.format(E, b))
-    var0 = varh(H4, rho)
-    #print('Before:\n', rho)
-    rho, var1=optimize_varh(H4, rho)
-    #print('After minimization:\n', rho)
-    E=trmul(rho, H4).real
-    b=beta(H4, E)
-    print("After minimization\nEnergy = {}, β = {}".format(E, b))
-    var2 = energy_var(H4, b)
-    print('Init Var: {}, Min Var: {}\nEnergy: {}, ETH Var: {}'.format(var0, var1, E, var2))
+    H4=Hamiltonian(6, 1/2, 1/2)
+    rho = rand_rho_prod(6)
+    minimize_var(H4, rho, nit=10)
+    #E=trmul(rho, H4).real
+    #b=ETH_beta(H4, E)
+    #print('Initial\nEnergy = {}, β = {}'.format(E, b))
+    #var0 = energy_var(H4, rho)
+    #rho, var1=optimize_varh(H4, rho)
+    #E=trmul(rho, H4).real
+    #b=beta(H4, E)
+    #print("After minimization\nEnergy = {}, β = {}".format(E, b))
+    #var2 = energy_var(H4, b)
+    #print('Init Var: {}, Min Var: {}\nEnergy: {}, ETH Var: {}'.format(var0, var1, E, var2))
