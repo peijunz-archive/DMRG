@@ -14,6 +14,9 @@ def I(S=1 / 2):
     '''Identity Matrix'''
     return np.eye(dof(S))
 
+def R(S=1/2):
+    '''Reverse all the spins'''
+    return I(S)[::-1]
 
 def Z(S=1 / 2):
     '''S_z spin matrix'''

@@ -3,7 +3,7 @@ import numpy as np
 import scipy.linalg as la
 from MPS import State
 from spin import sigma
-
+import AKLT as ak
 
 class TestMPS(unittest.TestCase):
     def testCanon(self):
@@ -50,7 +50,11 @@ class TestMPS(unittest.TestCase):
 
     def testAKLT(self):
         '''TODO Incorporate AKLT.py into here'''
-        pass
+        N = 20
+        s = ak.AKLT_State(N)
+        k = (N - 1) // 2
+        E = ak.Energy(s)
+        self.assertAlmostEqual(E/(N-1), -2/3)
 
 
 if __name__ == "__main__":

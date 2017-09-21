@@ -11,7 +11,7 @@ import copy
 nx = np.newaxis
 
 
-def cut(s, err=1e-10, x=20):
+def cut(s, err=1e-10, x=15):
     s /= s[0]
     ind = sum(np.abs(s) > err)
     ind = min(ind, x)
@@ -235,7 +235,7 @@ class State:
     def update_double(self, U, i, unitary=True):
         '''Double site i, i+1 ?unitary update
 
-        + For unitary update, no need to affect boundary.
+        + For unitary update, there is no need to affect boundary.
         + For virtual time, exp(-tau*H) is no longer unitary. Update site i+1
             + For non unitary case, if we update from left to right, then we
               can easily make it left orthogonalized, but not right.
@@ -274,3 +274,11 @@ class State:
 
     def copy(self):
         return copy.deepcopy(self)
+
+    def testCanon(self, err=1e-13):
+        for i in range(self.L):
+            S = self.block_single(i)
+            TSS = np.einsum("ijk, ijn->kn", S.conj(), S)
+            SST = np.einsum("ijk, ljk->il", S, S.conj())
+            assert la.norm(TSS - np.diag(self.Sr[i])**2) < err
+            assert la.norm(SST - np.diag(self.Sl[i])**2) < err
