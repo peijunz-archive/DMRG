@@ -7,57 +7,19 @@ from scipy.optimize import minimize
 from scipy.optimize import newton
 from spin import sigma
 from functools import reduce, partial
+from numpy.random import RandomState
 import Ising
 
-class RhoMatrix:
-    '''Proxy class'''
-    def __init__(self, rho):
-        self.rho = rho
-    def __iadd__(self, h):
-        U = la.expm(1j*h)
-        self.rho = U@self.rho@U.T.conj()
-        return self
-    def __add__(self, h):
-        ret = RhoMatrix(self.rho.copy())
-        ret += h
-        return ret
-    def __repr__(self):
-        return self.rho.__repr__()
-    def __str__(self):
-        return self.rho.__str__()
-
-def unity(A):
-    '''#DEPRECATED '''
-    L=tril(A, -1)
-    U=triu(A)
-    H=1j*(U+U.T)-(L-L.T)
-    return la.expm(H)
-
-def unityx(x):
-    '''#DEPRECATED '''
-    n=int(sqrt(x.size))
-    A=x.reshape(n,n)
-    L=tril(A, -1)
-    U=triu(A)
-    H=1j*(U+U.T)-(L-L.T)
-    return la.expm(H)
 
 def trmul(A, B):
     return np.sum(A*B.T)
 
-def _varh(H, rho, H2=None):
+def energy_var(H, rho, H2=None):
+    '''Energy variance for given H and rho'''
     if H2 is None:
         H2=H@H
     res=trmul(H2, rho)-trmul(H, rho)**2
     return res.real
-
-def varh(H, Rho, H2=None):
-    return _varh(H, Rho.rho, H2)
-
-def ETH_rho(H, b):
-    '''#DEPRECATED '''
-    R=la.expm(-b*H)
-    return R/trace(R)
 
 def Hamiltonian(n, delta, g):
     '''$H=-\sum (Z_iZ_j-\Delta X_iX_j)-g\sum X_i$'''
@@ -66,11 +28,45 @@ def Hamiltonian(n, delta, g):
     H-=delta*Ising.nearest(n, sigma[1], sigma[1])
     return H.todense()
 
-def energy(H, x):
-    return trmul(H, ETH_rho(H, x)).real
+# ===========
 
-def energy_var(H, x):
-    return varh(H, ETH_rho(H, x))
+def _B_Matrix(rho, H):
+    '''B=i(rho@H-H@rho)'''
+    B=1j*(rho@H)
+    B+=B.T.conj()
+    return B
+
+def gradient(H, rho, H2=None):
+    '''The gradient for rho'=exp(ih)@rho@exp(ih)'''
+    if H2 is None:
+        H2=H@H
+    coef=2*trmul(rho, H)
+    return _B_Matrix(rho, H2)-coef*_B_Matrix(rho, H)
+
+def minimize_var(fun, rho, H, eps=0.1):
+    H2 = H@H
+    for i in range(100):
+        print(fun(rho))
+        h = eps * gradient(H, rho, H2)
+        U = la.expm(1j*h)
+        rho = U@rho@U.T.conj()
+    return rho
+
+# ============== ETH =====================
+def ETH_rho(H, b):
+    '''rho for ETH state with given beta'''
+    R=la.expm(-b*H)
+    return R/trace(R)
+
+def ETH_energy(H, beta):
+    '''Find energy'''
+    return trmul(H, ETH_rho(H, beta)).real
+
+def ETH_beta(H, E):
+    return newton(lambda x:ETH_energy(H, x)-E, 0)
+
+def ETH_energy_var(H, x):
+    return energy_var(H, ETH_rho(H, x))
 
 
 def optimize_varh(H, Rho):
@@ -88,37 +84,31 @@ def optimize_varh(H, Rho):
     U=unityx(res.x)
     return U@rho@U.T.conj(), res.fun
 
-
-def optimize_varh2(H, rho):
-    '''Optimize like iTEBD, 2x2'''
-    pass
-
-def beta(H, E):
-    return newton(lambda x:energy(H, x)-E, 0)
-
+# ======== rho generation ==============
 def product_rho(*L):
+    '''Generate rho by product of List of small ones'''
     rho=reduce(sp.kron, L)
     return sp.diag(rho/sum(rho))
 
-def rand_rho(H):
-    rho = abs(randn(H.shape[0]))
+def rand_rho(H, rs=None):
+    '''Generate huge diagonal rho'''
+    if rs is None:
+        rs=RandomState(0)
+    rho = abs(rs.randn(H.shape[0]))
     rho/=sum(rho)
     return sp.diag(rho)
 
-def rand_rho_prod(n):
-    rhol = abs(randn(n, 2))+1
+def rand_rho_prod(n, rs=None):
+    if rs is None:
+        rs=RandomState(0)
+    rhol = abs(rs.randn(n, 2)+1)
     rhol /= np.sum(rhol, axis=1)[:, np.newaxis]
     print(rhol)
-    rho = reduce(sp.kron, rhol)
-    rho/= sum(rho)
-    return sp.diag(rho)
+    return product_rho(*rhol)
 
 if __name__ == "__main__":
     H4=Hamiltonian(4, 1/2, 1/2)
     rho = rand_rho_prod(4)
-    #rho=product_rho([9, 2], [2,4], [6,2])#, [3,4])
-    #rho=ETH_rho(H4, 1)+0.1*product_rho([5/7, 2], [2,4], [6,2])#perturbation
-    #rho/=trace(rho)
     E=trmul(rho, H4).real
     b=beta(H4, E)
     print('Initial\nEnergy = {}, β = {}'.format(E, b))
