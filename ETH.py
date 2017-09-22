@@ -95,17 +95,17 @@ def ETH_energy_var(H, x):
 def minimize_var(H, rho, meps=10, nit=100):
     H2 = H@H
     for i in range(nit):
-        print("Step {}, energy var {}".format(i, energy_var(H, rho, H2)))
+        #print("Step {}, energy var {}".format(i, energy_var(H, rho, H2)))
         M, f1, f2 = gradient(H, rho, H2)
         if f2 < f1/meps:
             x = meps
         else:
-            x = f1/f2
-            print(f1, f2, x, x*np.sqrt(f1))
+            x = f1/f2 # Choose smaller step if does not decrease
+            #print(f1, f2, x, x*np.sqrt(f1))
         h1 = - x * M
         U = la.expm(1j*h1)
         rho = U@rho@U.T.conj()
-    print("Step {}, energy var {}".format(nit, energy_var(H, rho, H2)))
+    #print("Step {}, energy var {}".format(nit, energy_var(H, rho, H2)))
     np.save('rho', rho)
     return rho
 
@@ -130,18 +130,26 @@ def rand_rho_prod(n, rs=None):
     rhol = abs(rs.randn(n, 2)+1)
     rhol /= np.sum(rhol, axis=1)[:, np.newaxis]
     return product_rho(*rhol)
-
+def cmp_rho(rho1, rho2):
+    print(la.norm(rho1-rho2)/la.norm(rho1+rho2))
+    n=int(np.sqrt(rho1.shape[0]))
+    r1 = np.trace(rho1.reshape([n]*4), axis1=1, axis2=3)
+    r2 = np.trace(rho2.reshape([n]*4), axis1=1, axis2=3)
+    print(la.norm(r1-r2)/la.norm(r1+r2))
 if __name__ == "__main__":
-    H4=Hamiltonian(6, 1/2, 1/2)
-    rho = rand_rho_prod(6)
-    minimize_var(H4, rho, nit=10)
-    #E=trmul(rho, H4).real
-    #b=ETH_beta(H4, E)
-    #print('Initial\nEnergy = {}, β = {}'.format(E, b))
-    #var0 = energy_var(H4, rho)
-    #rho, var1=optimize_varh(H4, rho)
-    #E=trmul(rho, H4).real
-    #b=beta(H4, E)
-    #print("After minimization\nEnergy = {}, β = {}".format(E, b))
-    #var2 = energy_var(H4, b)
-    #print('Init Var: {}, Min Var: {}\nEnergy: {}, ETH Var: {}'.format(var0, var1, E, var2))
+    H4=Hamiltonian(4, 1/2, 1/2)
+    rho = rand_rho_prod(4)
+    minimize_var(H4, rho)
+    E=trmul(rho, H4).real
+    b=ETH_beta(H4, E)
+    print('Initial\nEnergy = {}, β = {}'.format(E, b))
+    var0 = energy_var(H4, rho)
+    rho0=rho.copy()
+    rho = minimize_var(H4, rho, nit=10000)
+    var1 = energy_var(H4, rho)
+    E=trmul(rho, H4).real
+    b=ETH_beta(H4, E)
+    print("After minimization\nEnergy = {}, β = {}".format(E, b))
+    var2 = ETH_energy_var(H4, b)
+    print('Init Var: {}, Min Var: {}\nEnergy: {}, ETH Var: {}'.format(var0, var1, E, var2))
+    cmp_rho(ETH_rho(H4, b), rho)
