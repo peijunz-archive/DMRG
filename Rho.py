@@ -2,7 +2,8 @@ import numpy as np
 import scipy.optimize as opt
 from functools import reduce
 import scipy.linalg as la
-from ETH import trace2
+from optimization import trace2
+from numpy.random import RandomState
 
 
 @np.vectorize
@@ -64,7 +65,7 @@ def rand_rho(n, rs=None, s=None):
     if s is None:
         return np.diag(rho)
     else:
-        return np.diag(entropy.rho(rho, s))
+        return np.diag(rho_entropy(rho, s))
 
 def rand_rho_prod(n, rs=None, s=None):
     if rs is None:

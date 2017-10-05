@@ -1,7 +1,7 @@
 import Rho
 import scipy.optimize as opt
 import scipy.linalg as la
-import ETH
+import optimization
 import numpy as np
 
 def beta2rho(H, b):
@@ -11,7 +11,7 @@ def beta2rho(H, b):
 
 def beta2energy(H, beta):
     '''Find energy'''
-    return ETH.trace2(H, beta2rho(H, beta)).real
+    return optimization.trace2(H, beta2rho(H, beta)).real
 
 def energy2beta(H, E):
     '''Find beta=1/kT'''

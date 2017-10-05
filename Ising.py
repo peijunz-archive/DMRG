@@ -13,7 +13,6 @@ from spin import sigma
 def nearest(n, *ops, coef=1, sparse=False):
     eye_n = np.eye(*ops[0].shape)
     coef *= np.ones(n)
-
     def _local_H(k):
         l = [eye_n for i in range(n)]
         for i, op in enumerate(ops):
@@ -32,8 +31,10 @@ def Hamilton_trans(n, g=0, J=1):
     return A
 
 
-def Hamilton_XX(n, delta, g):
-    '''$H=-\sum (Z_iZ_j-\Delta X_iX_j)-g\sum X_i$'''
+def Hamilton_XX(n, delta, g, rs=None):
+    '''$H=-\sum (Z_iZ_j+\Delta X_iX_j)-g\sum X_i$'''
+    if rs is not None:
+        g = rs.uniform(-g, g, n)
     H=-nearest(n, sigma[1], coef=g)
     H-=nearest(n, sigma[3], sigma[3])
     H-=delta*nearest(n, sigma[1], sigma[1])
@@ -42,6 +43,8 @@ def Hamilton_XX(n, delta, g):
 
 if __name__ == '__main__':
     import scipy.linalg as la
-    A = Hamilton_trans(3, 0.1)
+    from numpy.random import RandomState
+
+    A = Hamilton_XX(4, 0.5, 1, rs=RandomState(5))
     print(A)
-    print(*la.eigh(A), sep='\n')
+    #print(*la.eigh(A), sep='\n')
