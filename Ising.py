@@ -32,7 +32,7 @@ def Hamilton_trans(n, g=0, J=1):
 
 
 def Hamilton_XX(n, delta, g, rs=None):
-    '''$H=-\sum (Z_iZ_j+\Delta X_iX_j)-g\sum X_i$'''
+    '''$H=-\sum (Z_iZ_j+\Delta X_iX_j)-\sum g_iX_i$'''
     if rs is not None:
         g = rs.uniform(-g, g, n)
     H=-nearest(n, sigma[1], coef=g)
@@ -40,6 +40,17 @@ def Hamilton_XX(n, delta, g, rs=None):
     H-=delta*nearest(n, sigma[1], sigma[1])
     return H
 
+def Hamilton_XZ(n, delta, g, rs=None, h=0.1):
+    '''$H=-\sum (X_iX_j+Y_iY_j-\Delta Z_iZ_j)+\sum gX_i+hZ_i$'''
+    if rs is not None:
+        g = rs.uniform(-g, g, n)
+        h = rs.uniform(-h, h, n)
+    H=-nearest(n, sigma[1], sigma[1])
+    H-=nearest(n, sigma[2], sigma[2])
+    H-=delta*nearest(n, sigma[3], sigma[3])
+    H+=nearest(n, sigma[1], coef=g)
+    H+=nearest(n, sigma[3], coef=h)
+    return H
 
 if __name__ == '__main__':
     import scipy.linalg as la

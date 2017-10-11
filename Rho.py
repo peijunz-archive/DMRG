@@ -105,6 +105,5 @@ def energy_var(H, rho, H2=None):
 def rotate(rho, rs):
     Hr, Hi = rs.randn(2, *rho.shape)
     H = Hr + 1j*Hi
-    H += H.T.conj()
-    U = la.expm(5j*H)
+    U, _, _ = la.svd(Hr + 1j*Hi)
     return U@rho@U.T.conj()
