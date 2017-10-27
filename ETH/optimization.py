@@ -4,6 +4,7 @@ import scipy.linalg as la
 import scipy.optimize as opt
 from .basic import *
 
+@profile
 def gradient(H, rho, H2=None):
     '''The gradient for rho'=exp(ih)@rho@exp(ih)
 
@@ -30,7 +31,12 @@ def Hessian(H, rho):
     A += sp.einsum("ki,jm->ijmk", rh, np.eye(*rho.shape))
     A += sp.einsum("ijkl->klij", A)
     return A
-    
+
+def expm2_ersatz(h):
+    I = np.eye(*h.shape)
+    return (I+h)@la.inv(I-h)
+
+@profile
 def minimize_rho(rho, f, df, meps=10, nit=100, err=1e-6):
     '''Add criteria for optimization'''
     cur = f(rho)
@@ -40,20 +46,21 @@ def minimize_rho(rho, f, df, meps=10, nit=100, err=1e-6):
             x = meps
         else:
             x = f1/f2
-        h1 = - x * M
         for i in range(10):
-            U = la.expm(1j*h1)
+            #U = la.expm((-1j*x)*M)
+            U = expm2_ersatz((-.5j*x)*M)
             rho_try = U@rho@U.T.conj()
             nxt = f(rho_try)
             if nxt < cur:
                 cur = nxt
                 rho = rho_try
                 break
-            h1/=2
+            x/=2
         if f1 < err:
             break
     return rho
 
+@profile
 def grad2(H2, rho):
     M = 1j*commuteh(rho, H2)
     f1 = trace2(M, M)
