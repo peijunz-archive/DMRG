@@ -27,65 +27,59 @@ def nearest(n, *ops, coef=1, sparse=False):
     '''
     eye_n = np.eye(*ops[0].shape)
     coef *= np.ones(n)
-    def _local_H(k):
+    _kron = sps.kron if sparse else np.kron
+    def _H_i(k):
         l = [eye_n for i in range(n)]
         for i, op in enumerate(ops):
             l[k+i] = op
-        if sparse:
-            return reduce(sps.kron, l)
-        else:
-            return reduce(np.kron, l)
-    return sum(coef[k]*_local_H(k) for k in range(n+1-len(ops)))
+        return reduce(_kron, l)
+    return sum(coef[k]*_H_i(k) for k in range(n+1-len(ops)))
 
 def Hamilton_trans(n, g=0, J=1):
-    '''$H=-J*Z_i x Z_{i+1}-g*X_i$'''
-    assert(n >= 2)
-    A = (-J) * nearest(n, sigma[3], sigma[3])
-    A -= g * nearest(n, sigma[1])
-    return A
+    H_tpl = '$H=-\sum_i JZ_iZ_{i+1} - \sum_i gX_i$'
 
+    H = np.zeros([2**n, 2**n], dtype='complex128')
+    H -= nearest(n, sigma[3], sigma[3], coef=J)
+    H -= nearest(n, sigma[1], coef=g)
 
-def Hamilton_XX(n=None, delta=1/2, g=1, rs=None):
-    '''$H=-\sum (Z_iZ_j+\Delta X_iX_j)-\sum g_iX_i$'''
-    if rs is not None:
-        g = rs.uniform(-g, g, n)
-    if n is None:
-        return Hamilton_XZ.__doc__
+    return {'H': H, 'H_template': H_tpl, 'n':n, 'J': J, 'g':g}
+
+def Hamilton_XX(n, delta=1/2, g=1):
+    H_tpl = '$H=-\sum (Z_iZ_{i+1}+\Delta X_iX_{i+1})-\sum g_iX_i$'
+
     H=np.zeros([2**n, 2**n], dtype='complex128')
     H-=nearest(n, sigma[1], coef=g)
     H-=nearest(n, sigma[3], sigma[3])
-    H-=delta*nearest(n, sigma[1], sigma[1])
-    return H
+    H-=nearest(n, sigma[1], sigma[1], coef=delta)
 
-def Hamilton_XZ(n=None, delta=1/2, g=1, rs=None, h=0.1):
-    '''$H=-\sum (X_iX_j+Y_iY_j-\Delta Z_iZ_j)+\sum gX_i+hZ_i$'''
-    if rs is not None:
-        g = rs.uniform(-g, g, n)
-    if n is None:
-        return Hamilton_XZ.__doc__
+    return {'H':H, 'H_template': H_tpl, 'n':n, 'delta': delta, 'g':g}
+
+def Hamilton_XZ(n, delta=1/2, g=1, h=0.1):
+    H_tpl= '$H=-\sum (X_iX_j+Y_iY_j-\Delta Z_iZ_j)+\sum (gX_i+hZ_i)$'
+
     H=np.zeros([2**n, 2**n], dtype='complex128')
     H-=nearest(n, sigma[1], sigma[1])
     H-=nearest(n, sigma[2], sigma[2])
-    H-=delta*nearest(n, sigma[3], sigma[3])
+    H-=nearest(n, sigma[3], sigma[3], coef=delta)
     H+=nearest(n, sigma[1], coef=g)
     H+=nearest(n, sigma[3], coef=h)
-    return H
 
-def Hamilton_TL(n=None, J=1, g=0.945, rs=None, h=0.8090):
-    '''$H=-\sum J Z_iZ_j+\sum gX_i+hZ_i$'''
-    if n is None:
-        return Hamilton_TL.__doc__
-    print(J, g, h)
+    return {'H':H, 'H_template': H_tpl, 'n':n, 'delta': delta, 'g':g, 'h':h}
+
+def Hamilton_TL(n, J=1, g=0.945, h=0.8090):
+    '''$H=-\sum J Z_iZ_{i+1}+\sum (gX_i+hZ_i)$'''
+    H_tpl= '$H=-\sum J Z_iZ_{i+1}+\sum (gX_i+hZ_i)$'
+
     H=np.zeros([2**n, 2**n], dtype='complex128')
-    H+=J*nearest(n, sigma[3], sigma[3])
-    H+=g*nearest(n, sigma[1])
-    H+=h*nearest(n, sigma[3])
-    return H
+    H+=nearest(n, sigma[3], sigma[3], coef=J)
+    H+=nearest(n, sigma[1], coef=g)
+    H+=nearest(n, sigma[3], coef=h)
+
+    return {'H':H, 'H_template': H_tpl, 'n':n, 'J': J, 'g':g, 'h':h}
 
 if __name__ == '__main__':
     import scipy.linalg as la
-    from numpy.random import RandomState
 
-    A = Hamilton_XX(4, 0.5, 1, rs=RandomState(5))
-    print(A)
-    #print(*la.eigh(A), sep='\n')
+    A = Hamilton_XX(4, delta=0.5, g=1)
+    print(A['H_template'])
+    print(*la.eigh(A['H']), sep='\n')
