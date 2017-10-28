@@ -52,7 +52,7 @@ def Hamilton_XX(n, delta=1/2, g=1):
     return {'H':H, 'H_template': H_tpl, 'n':n, 'delta': delta, 'g':g}
 
 def Hamilton_XZ(n, delta=1/2, g=1, h=0.1):
-    H_tpl= '$H=-\sum (X_iX_j+Y_iY_j-\Delta Z_iZ_j)+\sum (gX_i+hZ_i)$'
+    H_tpl= '$H=-\sum (X_iX_j+Y_iY_j+\Delta Z_iZ_j)+\sum (gX_i+hZ_i)$'
 
     H=np.zeros([2**n, 2**n], dtype='complex128')
     H-=nearest(n, sigma[1], sigma[1])

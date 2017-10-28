@@ -1,16 +1,18 @@
 import numpy as np
 import scipy.linalg as la
 
-from numpy.random import RandomState, uniform
+from numpy.random import RandomState
 from Ising import Hamilton_XZ, Hamilton_XX, Hamilton_TL
 from ETH import Rho, Gibbs
 from ETH.optimization import *
 from pylab import *
 from ETH.basic import *
-
-def uniform2(v, n):
+from scipy.misc import imresize
+def uniform2(v, n, rs=np.random):
     if isinstance(v, tuple):
-        return v[0]+v[1]*uniform(-1, 1, n)
+        l=v[0]+v[1]*rs.uniform(-1, 1, n)
+        print(l)
+        return l
     else:
         return v
 
@@ -28,10 +30,10 @@ def info(Hf, arg_tpl):
 def fname(Hf, arg_tpl, path="data", post='npy'):
     return "{}/{}.{}".format(path, info(Hf, arg_tpl), post)
 
-def generate_args(arg_tpl):
-    return {k:uniform2(v, arg_tpl['n']) for k, v in arg_tpl.items()}
+def generate_args(arg_tpl, rs=np.random):
+    return {k:uniform2(v, arg_tpl['n'], rs) for k, v in arg_tpl.items()}
 
-def Collect(Hf, arg_tpl, ns=11, nit=10):
+def Collect(Hf, arg_tpl, rs=np.random, ns=11, nit=10):
     n = arg_tpl['n']
     S = np.linspace(0, n, ns)[:-1]
     R = np.empty([ns, nit, 2**n, 2**n], dtype='complex128')
@@ -40,8 +42,8 @@ def Collect(Hf, arg_tpl, ns=11, nit=10):
         print("Entropy S", s)
         for j in range(nit):
             print("itering", j)
-            H4=Hf(**generate_args(arg_tpl))['H']
-            rho = Rho.rho_prod_even(n, s)
+            H4=Hf(**generate_args(arg_tpl, rs))['H']
+            rho = rand_rotate(Rho.rho_prod_even(n, s), np.random)
             H[i, j] = H4
             R[i, j] = minimize_var(H4, rho, nit=3000)
     result = {'Hamilton':Hf.__name__, 'S': S, 'nit':nit, 'rho':R, 'H':H, **arg_tpl}
@@ -49,12 +51,11 @@ def Collect(Hf, arg_tpl, ns=11, nit=10):
     print(fname(Hf, arg_tpl), 'Data saved!')
     return result
 
-def testConvergence(n, Hf, delta=1/2, g=1/2, s=2, nit=5, rs=None):
-    rs_rho = RandomState(12345)
+def testConvergence(Hf, arg_tpl, rs=None):
     H=Hf(n, delta, g, rs)
     R = np.empty([nit, 2**n, 2**n], dtype='complex128')
     for i in range(nit):
-        rho = rand_rotate(Rho.rho_prod_even(n, s), rs_rho)
+        rho = rand_rotate(Rho.rho_prod_even(n, s), np.random)
         R[i] = minimize_var(H, rho, nit=10000)
     w, v = la.eigh(H)
     print(w)
@@ -63,11 +64,32 @@ def testConvergence(n, Hf, delta=1/2, g=1/2, s=2, nit=5, rs=None):
         rho = v.T.conj()@R[i]@v
         print(diag(rho).real)
 
-def loadData(Hf, arg_tpl, ns=6):
+def testDiagonal(Hf, arg_tpl):
+    res = np.load(fname(Hf, arg_tpl)).item()
+    H, R, nit, S = res['H'], res['rho'], res['nit'], res['S']
+    print(arg_tpl)
+    for i, s in enumerate(S):
+        for j in range(nit):
+            w, v = la.eigh(H[i, j])
+            rho = v.T.conj()@R[i, j]@v
+            k = la.norm([norm(diag(rho, i)) for i in (0,)])/norm(rho)
+            print("Entropy {:.4f}, {:.4f}".format(s, k))
+
+def plot_rho(Hf, arg_tpl):
+    res = np.load(fname(Hf, arg_tpl)).item()
+    H, R, nit, S = res['H'], res['rho'], res['nit'], res['S']
+    for i, s in enumerate(S):
+        for j in range(nit):
+            w, v = la.eigh(H[i,   j])
+            rho = v.T.conj()@R[i, j]@v
+            print(norm(diag(rho))/norm(rho))
+            imsave('rho/S={:04.2f}-{:02d}.png'.format(s, j), imresize(abs(rho), 800, 'nearest'))
+
+def loadData(Hf, arg_tpl, rs=np.random, ns=6):
     try:
         return np.load(fname(Hf, arg_tpl)).item()
     except FileNotFoundError:
-        return Collect(Hf, arg_tpl, ns=ns)
+        return Collect(Hf, arg_tpl, rs, ns)
 
 #def draw_variance(*args, **arg_tpl):
     #res = loadData(*args, **arg_tpl)
@@ -100,9 +122,9 @@ def draw_rho_e(*args, **arg_tpl):
             s1 = Gibbs.beta2entropy(H_, b)
             print(la.norm(np.diag(rho).real)/la.norm(rho), s1)
 
-def draw_diff_rho(Hf, arg_tpl, ns=2):
+def draw_diff_rho(Hf, arg_tpl, rs=np.random, ns=2):
     n=arg_tpl['n']
-    res = loadData(Hf, arg_tpl, ns)
+    res = loadData(Hf, arg_tpl, rs, ns)
     H, R, nit, S = res['H'], res['rho'], res['nit'], res['S']
     dif = np.empty([len(S), nit, 2*n-1])
     for i, s in enumerate(S):
@@ -125,8 +147,8 @@ def draw_diff_rho(Hf, arg_tpl, ns=2):
     legend();
     savefig(fname(Hf, arg_tpl, "figures", "rho-diff.pdf"))
 if __name__ == "__main__":
-    rs = RandomState(12358121)
-    #for i in [0, 0.2, 0.5, 1, 2, 4, 8, 16]:
-        #print("Window", i)
-    draw_diff_rho(Hamilton_XZ, {"n":6, "delta":0.5, "g":(0, 1)}, ns=2)
+    rs=RandomState(164147)
+    #for w in [0, 0.2, 0.5, 1, 2, 4, 8, 16]:
+        #draw_diff_rho(Hamilton_XZ, {"n":6, "delta":0.5, "g":(0, w)}, rs, ns=10)
+    plot_rho(Hamilton_XZ, {"n":6, "delta":0.5, "g":(0, 0)})
     #testConvergence(4, Hamilton_XZ, g=.1, rs=rs)
