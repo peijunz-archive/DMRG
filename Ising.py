@@ -2,9 +2,6 @@
 
 Tools to generate n-nearest interaction Hamiltonian.
 
-Transverse field Ising model is an important test case for
-the generation of H and psi
-
 '''
 import numpy as np
 import scipy.sparse as sps
@@ -67,7 +64,7 @@ def Hamilton_XZ(n, delta=1/2, g=1, h=0.1):
     return {'H':H, 'H_template': H_tpl, 'n':n, 'delta': delta, 'g':g, 'h':h}
 
 def Hamilton_TL(n, J=1, g=0.945, h=0.8090):
-    '''$H=-\sum J Z_iZ_{i+1}+\sum (gX_i+hZ_i)$'''
+    '''Transverse field Ising model with Longitudinal field'''
     H_tpl= '$H=-\sum J Z_iZ_{i+1}+\sum (gX_i+hZ_i)$'
 
     H=np.zeros([2**n, 2**n], dtype='complex128')
@@ -78,6 +75,8 @@ def Hamilton_TL(n, J=1, g=0.945, h=0.8090):
     return {'H':H, 'H_template': H_tpl, 'n':n, 'J': J, 'g':g, 'h':h}
 
 if __name__ == '__main__':
+    '''Transverse field Ising model is an important test case for
+    the generation of H and psi'''
     import scipy.linalg as la
 
     A = Hamilton_XX(4, delta=0.5, g=1)

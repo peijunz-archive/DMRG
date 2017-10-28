@@ -1,43 +1,52 @@
 import numpy as np
 import scipy.linalg as la
 
-from numpy.random import RandomState
+from numpy.random import RandomState, uniform
 from Ising import Hamilton_XZ, Hamilton_XX, Hamilton_TL
 from ETH import Rho, Gibbs
 from ETH.optimization import *
 from pylab import *
 from ETH.basic import *
-def analyse(H, rho):
-    var = Rho.energy_var(H, rho)
-    E = trace2(rho, H).real
-    b = Gibbs.energy2beta(H, E)
-    S = -trace2(rho, la.logm(rho)).real/np.log(2)
-    var_eth = Gibbs.beta2var(H, b)
-    return (S, E, b, var, var_eth)
-def fname(n, delta, g, rs):
-    fmt = "n=%d_delta=%.2lf_g=%07.4lf"
-    name = fmt%(n, delta, g)
-    if rs is not None:
-        name += "random"
-        return name
 
-def Collect(n, Hf, delta=1/2, g=1/2, ns=11, nit=10, rs=None):
-    rs_rho = RandomState(0)
+def uniform2(v, n):
+    if isinstance(v, tuple):
+        return v[0]+v[1]*uniform(-1, 1, n)
+    else:
+        return v
+
+def argv_str(v):
+    if isinstance(v, tuple):
+        return "{}±{}".format(*v)
+    else:
+        return v
+
+def info(Hf, arg_tpl):
+    l=["{}={}".format(k, argv_str(v)) for k, v in arg_tpl.items()]
+    l.insert(0, Hf.__name__)
+    return '_'.join(l)
+
+def fname(Hf, arg_tpl, path="data", post='npy'):
+    return "{}/{}.{}".format(path, info(Hf, arg_tpl), post)
+
+def generate_args(arg_tpl):
+    return {k:uniform2(v, arg_tpl['n']) for k, v in arg_tpl.items()}
+
+def Collect(Hf, arg_tpl, ns=11, nit=10):
+    n = arg_tpl['n']
     S = np.linspace(0, n, ns)[:-1]
     R = np.empty([ns, nit, 2**n, 2**n], dtype='complex128')
-    H = np.empty([ns, nit, 2**n, 2**n], dtype='complex128')
+    H = np.empty_like(R)
     for i, s in enumerate(S):
         print("Entropy S", s)
         for j in range(nit):
             print("itering", j)
-            H4=Hf(n, delta, g, rs)
+            H4=Hf(**generate_args(arg_tpl))['H']
+            rho = Rho.rho_prod_even(n, s)
             H[i, j] = H4
-            rho = rand_rotate(Rho.rho_prod_even(n, s), rs_rho)
             R[i, j] = minimize_var(H4, rho, nit=3000)
-    result = {'Hamilton':Hf(), 'delta':1/2, 'g':g, 'S': S, 'nit':nit, 'rho':R, 'H':H}
-    name = fname(n, delta, g, rs)
-    np.save("data/"+name+'.npy', result)
-    print(name, 'saved!')
+    result = {'Hamilton':Hf.__name__, 'S': S, 'nit':nit, 'rho':R, 'H':H, **arg_tpl}
+    np.save(fname(Hf, arg_tpl), result)
+    print(fname(Hf, arg_tpl), 'Data saved!')
     return result
 
 def testConvergence(n, Hf, delta=1/2, g=1/2, s=2, nit=5, rs=None):
@@ -54,15 +63,14 @@ def testConvergence(n, Hf, delta=1/2, g=1/2, s=2, nit=5, rs=None):
         rho = v.T.conj()@R[i]@v
         print(diag(rho).real)
 
-def loadData(n, Hf, delta, g, ns=6, rs=None):
-    name = fname(n, delta, g, rs)
+def loadData(Hf, arg_tpl, ns=6):
     try:
-        return np.load("data/"+name+'.npy').item()
+        return np.load(fname(Hf, arg_tpl)).item()
     except FileNotFoundError:
-        return Collect(n, Hf, delta, g, rs=rs, ns=ns)
+        return Collect(Hf, arg_tpl, ns=ns)
 
-#def draw_variance(*args, **argv):
-    #res = loadData(*args, **argv)
+#def draw_variance(*args, **arg_tpl):
+    #res = loadData(*args, **arg_tpl)
     #re
     #S, b, var, var_eth = a[:, :, :4].transpose([2, 0, 1])
     #dif = a[:, :, 4:]
@@ -79,8 +87,8 @@ def loadData(n, Hf, delta, g, ns=6, rs=None):
     #title('Variance for random H(%d, %.2lf, %.2lf)'%(n, delta, g));
     #savefig("figures/"+name+"-Variance.pdf")
 
-def draw_rho_e(*args, **argv):
-    res = loadData(*args, **argv)
+def draw_rho_e(*args, **arg_tpl):
+    res = loadData(*args, **arg_tpl)
     H, R, nit, S = res['H'], res['rho'], res['nit'], res['S']
     for i, s in enumerate(S):
         for j in range(nit):
@@ -92,9 +100,9 @@ def draw_rho_e(*args, **argv):
             s1 = Gibbs.beta2entropy(H_, b)
             print(la.norm(np.diag(rho).real)/la.norm(rho), s1)
 
-def draw_diff_rho(*args, **argv):
-    n, _, delta, g=args
-    res = loadData(*args, **argv)
+def draw_diff_rho(Hf, arg_tpl, ns=2):
+    n=arg_tpl['n']
+    res = loadData(Hf, arg_tpl, ns)
     H, R, nit, S = res['H'], res['rho'], res['nit'], res['S']
     dif = np.empty([len(S), nit, 2*n-1])
     for i, s in enumerate(S):
@@ -103,23 +111,22 @@ def draw_diff_rho(*args, **argv):
             grho = Gibbs.beta2rho(H[i, j], b)
             dif[i, j] = Rho.compare(R[i, j], grho)
             v = la.eigvalsh(H[i, j])
-            print("bE", b, b*(v[0]-v[-1]).real/len(v))
+            #print("bE", b, b*(v[0]-v[-1]).real/len(v))
     mdif=mean(dif, axis=1)
     sdif=std(dif, axis=1, ddof=1)/np.sqrt(nit)
-    name = fname(n, delta, g, rs)
-    print(dif[0, 0])
+    #print(dif[0, 0])
     cla()
     for i, s in enumerate(S):
-        errorbar(arange(-n+1, n), mdif[i], sdif[i], label="{:.1f}".format(s), capsize=1.5)
+        errorbar(arange(-n+1, n), mdif[i], sdif[i], label="S={:.1f}".format(s), capsize=1.5)
     grid()
-    title('Diff between rho for random H(%d, %.2lf, %.2lf), n_try=%d'%(n, delta, g, nit));
+    title('Diff between rho for {}'.format(info(Hf, arg_tpl)));
     xlabel('Number of traced sites, +/- mean left/right');
     ylabel(r'$|\mathrm{tr}[\rho-\rho_G]|$')
     legend();
-    savefig("figures/"+name+res['Hamilton']+"-rho-diff.pdf")
+    savefig(fname(Hf, arg_tpl, "figures", "rho-diff.pdf"))
 if __name__ == "__main__":
     rs = RandomState(12358121)
     #for i in [0, 0.2, 0.5, 1, 2, 4, 8, 16]:
         #print("Window", i)
-    draw_diff_rho(5, Hamilton_TL, 1, 0.9045, rs=rs, ns=8)
-    testConvergence(4, Hamilton_XZ, g=.1, rs=rs)
+    draw_diff_rho(Hamilton_XZ, {"n":6, "delta":0.5, "g":(0, 1)}, ns=2)
+    #testConvergence(4, Hamilton_XZ, g=.1, rs=rs)
