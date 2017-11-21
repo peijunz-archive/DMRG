@@ -30,12 +30,22 @@ def energy_var(H, rho, H2=None):
     return res.real
 
 
-def rand_unitary(rho, rs):
+def rand_unitary(rho, amp=None, rs=np.random):
     Hr, Hi = rs.randn(2, *rho.shape)
     H = Hr + 1j*Hi
     U, _, _ = la.svd(Hr + 1j*Hi)
+    if amp is not None:
+        return la.expm(amp*la.logm(U))
     return U
 
-def rand_rotate(rho, rs):
-    U = rand_unitary(rho, rs)
+def rand_rotate(rho, amp=None, rs=np.random):
+    U = rand_unitary(rho, amp, rs)
     return U@rho@U.T.conj()
+
+def test_mini(f, H, rho, x=0.01, n=100):
+    bench = f(H, rho)
+    for i in range(n):
+        test = f(H, rand_rotate(rho, x))
+        if test < bench:
+            return False
+    return True
