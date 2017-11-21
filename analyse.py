@@ -8,6 +8,8 @@ from ETH.optimization import *
 from pylab import *
 from ETH.basic import *
 from scipy.misc import imresize
+import os
+
 def uniform2(v, n, rs=np.random):
     if isinstance(v, tuple):
         l=v[0]+v[1]*rs.uniform(-1, 1, n)
@@ -33,7 +35,7 @@ def fname(Hf, arg_tpl, path="data", post='npy'):
 def generate_args(arg_tpl, rs=np.random):
     return {k:uniform2(v, arg_tpl['n'], rs) for k, v in arg_tpl.items()}
 
-def Collect(Hf, arg_tpl, rs=np.random, ns=11, nit=10):
+def Collect(Hf, arg_tpl, arg_opt, rs=np.random, ns=11, nit=10):
     n = arg_tpl['n']
     S = np.linspace(0, n, ns)[:-1]
     R = np.empty([ns, nit, 2**n, 2**n], dtype='complex128')
@@ -43,9 +45,9 @@ def Collect(Hf, arg_tpl, rs=np.random, ns=11, nit=10):
         for j in range(nit):
             print("itering", j)
             H4=Hf(**generate_args(arg_tpl, rs))['H']
-            rho = rand_rotate(Rho.rho_prod_even(n, s), np.random)
+            rho = Rho.rho_prod_even(n, s)#rand_rotate(, np.random)
             H[i, j] = H4
-            R[i, j] = minimize_var(H4, rho, nit=3000)
+            R[i, j] = minimize_var(H4, rho, **arg_opt)
     result = {'Hamilton':Hf.__name__, 'S': S, 'nit':nit, 'rho':R, 'H':H, **arg_tpl}
     np.save(fname(Hf, arg_tpl), result)
     print(fname(Hf, arg_tpl), 'Data saved!')
@@ -75,21 +77,31 @@ def testDiagonal(Hf, arg_tpl):
             k = la.norm([norm(diag(rho, i)) for i in (0,)])/norm(rho)
             print("Entropy {:.4f}, {:.4f}".format(s, k))
 
-def plot_rho(Hf, arg_tpl):
+def plot_rho(Hf, arg_tpl, zipper=False):
     res = np.load(fname(Hf, arg_tpl)).item()
     H, R, nit, S = res['H'], res['rho'], res['nit'], res['S']
+    path = info(Hf, arg_tpl)
+    try:
+        os.mkdir(path)
+    except FileExistsError:
+        os.system("rm -r {}/*.png".format(path))
+    good = np.empty((len(S), nit), 'float')
     for i, s in enumerate(S):
         for j in range(nit):
             w, v = la.eigh(H[i,   j])
+            print(w)
             rho = v.T.conj()@R[i, j]@v
-            print(norm(diag(rho))/norm(rho))
-            imsave('rho/S={:04.2f}-{:02d}.png'.format(s, j), imresize(abs(rho), 800, 'nearest'))
+            good[i, j] = norm(diag(rho))/norm(rho)
+            imsave('{}/S={:04.2f}-{:02d}.png'.format(path, s, j), imresize(abs(rho), 800, 'nearest'))
+    if zipper:
+        os.system("zip {0}.zip {0}/*.png 1>/dev/null".format(path))
+    print(mean(good, axis=1))
 
-def loadData(Hf, arg_tpl, rs=np.random, ns=6):
+def loadData(Hf, arg_tpl, arg_opt=None, arg_clt=None):
     try:
         return np.load(fname(Hf, arg_tpl)).item()
     except FileNotFoundError:
-        return Collect(Hf, arg_tpl, rs, ns)
+        return Collect(Hf, arg_tpl, arg_opt, **arg_clt)
 
 #def draw_variance(*args, **arg_tpl):
     #res = loadData(*args, **arg_tpl)
@@ -122,9 +134,9 @@ def draw_rho_e(*args, **arg_tpl):
             s1 = Gibbs.beta2entropy(H_, b)
             print(la.norm(np.diag(rho).real)/la.norm(rho), s1)
 
-def draw_diff_rho(Hf, arg_tpl, rs=np.random, ns=2):
+def draw_diff_rho(Hf, arg_tpl, arg_opt, arg_clt):
     n=arg_tpl['n']
-    res = loadData(Hf, arg_tpl, rs, ns)
+    res = loadData(Hf, arg_tpl, arg_opt, arg_clt)
     H, R, nit, S = res['H'], res['rho'], res['nit'], res['S']
     dif = np.empty([len(S), nit, 2*n-1])
     for i, s in enumerate(S):
@@ -133,7 +145,7 @@ def draw_diff_rho(Hf, arg_tpl, rs=np.random, ns=2):
             grho = Gibbs.beta2rho(H[i, j], b)
             dif[i, j] = Rho.compare(R[i, j], grho)
             v = la.eigvalsh(H[i, j])
-            #print("bE", b, b*(v[0]-v[-1]).real/len(v))
+            print("bE", b, b*(v[0]-v[-1]).real/len(v))
     mdif=mean(dif, axis=1)
     sdif=std(dif, axis=1, ddof=1)/np.sqrt(nit)
     #print(dif[0, 0])
@@ -146,9 +158,13 @@ def draw_diff_rho(Hf, arg_tpl, rs=np.random, ns=2):
     ylabel(r'$|\mathrm{tr}[\rho-\rho_G]|$')
     legend();
     savefig(fname(Hf, arg_tpl, "figures", "rho-diff.pdf"))
+
 if __name__ == "__main__":
     rs=RandomState(164147)
-    #for w in [0, 0.2, 0.5, 1, 2, 4, 8, 16]:
-        #draw_diff_rho(Hamilton_XZ, {"n":6, "delta":0.5, "g":(0, w)}, rs, ns=10)
-    plot_rho(Hamilton_XZ, {"n":6, "delta":0.5, "g":(0, 0)})
+    for w in [0.25, 0.5, 1, 2, 4, 8]:
+        draw_diff_rho(Hamilton_XZ,
+                      {"n":6, "delta":0.54, "g":(0, w)},
+                      {'nit':3000, 'E':5},
+                      {'rs':rs, 'ns':10, 'nit':6})
+        plot_rho(Hamilton_XZ, {"n":6, "delta":0.54, "g":(0, w)})
     #testConvergence(4, Hamilton_XZ, g=.1, rs=rs)

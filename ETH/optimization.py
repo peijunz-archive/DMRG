@@ -31,10 +31,10 @@ def gradient(H, rho, H2=None, err=0):
     return M_, f1m_.real, f2_.real
 
 #@profile
-def grad2(H2, rho):
-    M = 1j*commuteh(rho, H2)
+def grad2(h, rho):
+    M = 1j*commuteh(rho, h)
     f1 = la.norm(M)**2
-    f2 = trace2(commuteh(M, rho), commuteh(M, H2))
+    f2 = trace2(commuteh(M, rho), commuteh(M, h))
     return M, f1.real, f2.real
 
 def Hessian(H, rho):
@@ -67,9 +67,8 @@ def minimize_rho(rho, f, df, meps=10, nit=100, err=0):
             x = -f1/f2
         for j in range(10):
             #U = la.expm((-1j*x)*M)
-            U = expm2_ersatz((0.5j*x)*M)
+            U = expm2_ersatz((1j*x)*M)
             rho_try = U@rho@U.T.conj()
-            #print(rho)
             nxt = f(rho_try)
             if nxt < cur or (f1 == 0):
                 #print(cur, nxt-cur)
@@ -78,16 +77,17 @@ def minimize_rho(rho, f, df, meps=10, nit=100, err=0):
                 break
             #print("Bad", cur, nxt-cur)
             x/=2
-        if j==9 or (f1 < err and f2 >= 0):
+        if ((i*10>nit) and j==9) or (f1 < err and f2 >= 0):
             # Judge convergence
             print("Stop at {} with f1={}, f2={}".format(i, f1, f2))
             break
     return rho
 
 def minimize_var_fix(H, rho, E, meps=10, nit=100, err=0):
-    H2 = (H-E)@(H-E)
-    f = lambda r: trace2(H2, r).real
-    df = partial(grad2, H2)
+    Delta = H-E*np.eye(*H.shape)
+    h = Delta@Delta
+    f = lambda r: trace2(h, r).real
+    df = partial(grad2, h)
     return minimize_rho(rho, f, df, meps, nit, err)
 
 def minimize_var_nfix(H, rho, meps=10, nit=100, err=0):
