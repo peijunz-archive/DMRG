@@ -11,7 +11,7 @@ import copy
 nx = np.newaxis
 
 
-def cut(s, err=1e-10, x=15):
+def cut(s, x, err):
     s /= s[0]
     ind = sum(np.abs(s) > err)
     ind = min(ind, x)
@@ -20,9 +20,9 @@ def cut(s, err=1e-10, x=15):
     return s, ind
 
 
-def svd_cut(m, err=1e-10, x=20):
+def svd_cut(m, x=20, err=1e-10):
     u, s, v = la.svd(m, full_matrices=False)
-    s, k = cut(s, err, x)
+    s, k = cut(s, x, err)
     return u[:, :k], s, v[:k]
 
 
@@ -35,7 +35,7 @@ class State:
     TODO Periodic boundary condition?
     '''
 
-    def __init__(self, arg=(1, 1), dim=2):
+    def __init__(self, arg=(1, 1), dim=2, trun=20):
         '''
         arg may be x or M, only one of them is needed.
         x is an array of truncation length with list length n+1,
@@ -56,6 +56,7 @@ class State:
         self.s = np.zeros_like(self.x, dtype='object')
         self.s[0] = np.ones(self.x[0])
         self.canonical = False
+        self.trun = trun
 
     def from_x(self, x, dim):
         self.dim = dim
@@ -133,7 +134,7 @@ class State:
         after = (self.xl[i], self.dim, -1)
         self.M[i] *= self.Sl[i][:, nx, nx]
         # SVD
-        u, s, v = svd_cut(self.M[i].reshape(before))
+        u, s, v = svd_cut(self.M[i].reshape(before), self.trun)
         # Post job
         self.M[i] = u.reshape(after)
         self.xr[i] = len(s)
@@ -147,7 +148,7 @@ class State:
         after = (-1, self.dim, self.xr[i])
         self.M[i] *= self.Sr[i][nx, nx]
         # SVD
-        u, s, v = svd_cut(self.M[i].reshape(before))
+        u, s, v = svd_cut(self.M[i].reshape(before), self.trun)
         # Post job
         self.M[i] = v.reshape(after)
         self.xl[i] = len(s)
@@ -221,10 +222,11 @@ class State:
                 E = np.einsum('kl, kio, lir->or', E, b.conj(), b)
         return np.trace(E)
 
-    def measure(self, start, op):
+    def measure(self, start, op, Hermitian=True):
         n = round(math.log(op.size, self.dim)/2)
         s = self.block(start, n)
-        return np.einsum('abd, aed, be', s, s.conj(), op)
+        ret = np.einsum('abd, aed, be', s, s.conj(), op)
+        return ret.real if Hermitian else ret
 
     def update_single(self, U, i, unitary=True):
         '''Apply U at single site i'''
@@ -243,7 +245,7 @@ class State:
         mb = np.einsum('lcr, rjk, abcj->labk', self.B(i), self.B(i + 1), U)
         m = self.Sl[i][:, nx, nx, nx] * mb
         sh = m.shape
-        u, s, v = svd_cut(m.reshape(sh[0] * sh[1], -1))
+        u, s, v = svd_cut(m.reshape(sh[0] * sh[1], -1), self.trun)
         self.xr[i] = len(s)
         u = u.reshape(*sh[:2], -1)
         v = v.reshape(-1, *sh[2:])

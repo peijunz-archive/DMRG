@@ -1,0 +1,111 @@
+\documentclass[10pt]{article}
+\usepackage{zpj}
+\usepackage{braket}
+\usepackage{hyperref}
+\title{Proof of $[\rho, H]= 0$ for minimum}
+\author{Peijun Zhu}
+
+\begin{document}
+\maketitle
+
+\section{Derivatives over a small perturbation}
+\subsection{Basic Derivatives}
+Define function $f$ as the expectation value of $h$ with $\rho$ unitary transformed by $U=\ee^{\ii xM}$:
+\begin{equation}
+f(x, M, h, \rho)=\tr \Big[\ee^{\ii xM}\rho \ee^{-\ii xM}h\Big],
+\end{equation}
+where $M, \rho, h$ are nonzero Hermitian operators. At $x=0$,
+\[\frac{\pp f}{\pp x}\Big|_{x=0}=\tr \Big[M\ii [\rho, h]\Big]\mdef [M, \rho, h],\]
+where $[\cdot, \cdot, \cdot]$ is tri-linear and antisymmetric.
+\begin{align}
+\frac{\pp^2 f}{\pp x^2}\Big|_{x=0}&=\tr \Big[2M\rho Mh-M^2\rho h-\rho M^2h\Big]\\
+&=\tr \Big[[M,\rho][M, h]\Big]\\
+&=2\tr \Big[M\rho [M, h]\Big]=2\tr \Big[Mh [M, \rho]\Big]
+\end{align}
+Any Hermitian can be expanded by $M=\sum x_iM_i$, with. 
+\begin{equation}
+\nabla_i f=[M_i,\rho, h], \quad H_{ij}f=2\tr \Big[M_i\rho[M_j, h]\Big]
+\end{equation}
+
+\subsection{Derivatives of variance}
+For given $H$, variance of energy for $\rho$ under a small unitary transformation $\ee^{\ii xM}$ is 
+\begin{equation}
+V(x, M)=\langle H^2\rangle(x, M)-\langle H\rangle^2(x, M)=f(x, M, H^2, \rho)-f^2(x, M, H, \rho)
+\end{equation}
+Thus we have
+\begin{align}
+\frac{\pp V}{\pp x}\Big|_{x=0}&=\frac{\pp \langle H^2\rangle}{\pp x}-2\langle H\rangle\frac{\pp \langle H\rangle}{\pp x}\Big|_{x=0}\\
+&=[M, \rho, H^2]-2E[M, \rho, H]\\
+&= [M, \rho, (H-E)^2]
+\end{align}
+\begin{align}
+\frac{\pp^2 V}{\pp x^2}\Big|_{x=0}&=\frac{\pp^2 \langle H^2\rangle}{\pp x^2}-2\langle H\rangle\frac{\pp^2 \langle H\rangle}{\pp x^2}-2\left(\frac{\pp \langle H\rangle}{\pp x}\right)^2\Big|_{x=0}\\
+&=\tr \Big[[M,\rho][M, H^2]\Big]-2E\tr \Big[[M,\rho][M, H]\Big]-2[M, \rho, H]^2\\
+&=\tr \Big[[M,\rho][M, H^2-2EH]\Big]-2[M, \rho, H]^2\\
+&=\tr \Big[[M,\rho]\big[M, (H-E)^2\big]\Big]-2[M, \rho, H]^2
+\end{align}
+\begin{equation}
+	H_{ij}=\tr \Big[[M_i,\rho]\big[M_j, (H-E)^2\big]\Big]-2[M_i, \rho, H][M_j, \rho, H]
+\end{equation}
+\section{Stationary points (\texorpdfstring{$[\rho, (H-E)^2]=0$}{[rho, (H-E)^2]=0})}
+If $V(x)$ reaches a stationary point, where $\pp V/\pp x|_{x=0}\equiv 0$ for any $M$, we can prove $[\rho, (H-E)^2]=0$. Variance can no longer be optimized by steepest descend. We want to prove that those stationary points $[\rho, (H-E)^2]=0$ with $[\rho, H]\neq 0$ are not a minimum point, i.e.\ it is a saddle point or maximum point. 
+
+Generally, any $M$ satisfying $[M, (H-E)^2]=0$ make $V'$ and first term in $V''$ vanish. As $[\rho, H]\neq 0$, we can choose $M_0=\ii[\rho, H]$ as the generator of unitary transformation. It is obvious that $[M_0, (H-E)^2]=0$ as both $\rho$ and $H$ commutes with $(H-E)^2$. For $M_0$
+\begin{equation}
+\frac{\pp V}{\pp x}\Big|_{x=0}=0,\quad \frac{\pp^2 V}{\pp x^2}\Big|_{x=0}=-2\big|[\rho, H]\big|^2<0,
+\end{equation}
+where $|\cdot|$ is the Frobenius norm of matrix. 
+
+\section{Stationary points with \texorpdfstring{$[\rho, H]=0$}{[rho, H]=0}}
+Even for $[\rho, H]=0$, it may still be a saddle point. We are giving a stronger criteria for minimum point. If $[\rho, H]=0$, then $[\rho, (H-E)^2]=0$ and
+\begin{equation}
+\pp V/\pp x|_{x=0}\equiv 0,\quad \pp^2 V/\pp x^2|_{x=0}=\tr \Big[[M,\rho]\big[M, (H-E)^2\big]\Big]
+\end{equation}
+It is obvious that for any diagonal $M$ in CSCO of $\rho$ and $H$, $\ee^{\ii M}$ does not change $\rho$. So we only consider diagonal free $M$. For elementary $M_{ij}$ in subspace of $\ket{i}$ and $\ket{j}$:
+\[M_{ij}\mdef m_{ij}\ket i\bra j+m_{ji}\ket j\bra i\]
+If we define $\Delta_k=E_k-E$, then 
+\begin{align}
+V''(M_{ij})&=\tr \Bigg[\begin{bmatrix}
+0 &-m_{ij}(\rho_i-\rho_j)\\
+m_{ji}(\rho_i-\rho_j) &0
+\end{bmatrix}\begin{bmatrix}
+0 &-m_{ij}(\Delta_i^2-\Delta_j^2)\\
+m_{ji}(\Delta_i^2-\Delta_j^2) &0
+\end{bmatrix}\Bigg]\\
+&=-2|m_{ij}|^2(\rho_i-\rho_j)(\Delta_i^2-\Delta_j^2)
+\end{align}
+For minimum point, $V''\geq 0$ for any $M$. Consequently,
+\begin{equation}
+(\rho_i-\rho_j)(\Delta_i^2-\Delta_j^2)\leq0,\quad \forall i,j\label{cond}
+\end{equation}
+is a \emph{necessary condition} for minimum point. 
+
+We can prove that (\ref{cond}) is also a \emph{sufficient condition} for $V''\geq 0$. For arbitrary
+\begin{equation}
+M=\sum_{i<j} M_{ij}
+\end{equation}
+\begin{align}
+V''&=\sum_{i<j}\sum_{k<l}\tr \Big[[M_{ij},\rho]\big[M_{kl}, (H-E)^2\big]\Big]\\
+&=\sum_{i<j} \Big[[M_{ij},\rho]\big[M_{ij}, (H-E)^2\big]\Big]\\
+&=\sum_{i<j} V''(M_{ij})
+\end{align}
+Similarly
+\begin{equation}
+(\rho_i-\rho_j)(\Delta_i^2-\Delta_j^2)< 0,\quad \forall i,j\label{cond2},
+\end{equation}
+is equivalent to $V''>0$. It is sufficient for a minimum.
+\paragraph{Conclusion under $[\rho, H]=0$.} Condition (\ref{cond}) is sufficient and necessary condition that $V''\geq 0$, i.e.\ Hessian is positive semidefinite. Similar condition (\ref{cond2}) is sufficient and necessary condition that $V''> 0$, i.e.\ Hessian is positive definite. This means that larger eigenvalues of $\rho$ should reside in eigenstate with energy close to mean energy, otherwise we can optimize the variance by applying $M_{ij}$ which swaps two eigenvalues of $\rho$. This is intuitive and also numerically confirmed.
+\begin{figure}[htb]
+\centering
+\includegraphics[height=5cm]{figures/optimized.png}
+\caption{$\rho$ in energy eigenbases}
+\end{figure} 
+\section{Optimization Process}
+If $\big|[\rho, (H-E)^2]\big|>k\big|[\rho, H]\big|$, $k\sim\sqrt{V}$, we assume $\rho$ is not near a saddle point. In this case we use $M=\ii[\rho, (H-E)^2]$ as optimization direction with step size $x=-V''/V'$. 
+
+If the condition is not satisfied, we use $M=\ii [\rho, H]$ as (temporary) optimization direction. For small $\rho, H$, this seems to works very well.
+
+\paragraph{Convergence criteria} For every optimization step, if the initial step size $x$ does not really give a smaller variance, we try to half the step size iteratively until $x/2^{10}$. If there is no smaller variance, we terminate the optimization process. 
+
+What if it stuck?
+\end{document}

@@ -1,5 +1,5 @@
-import spin
-from MPS import State
+from DMRG import spin
+from DMRG.MPS import State
 import numpy as np
 import scipy.linalg as la
 from functools import reduce

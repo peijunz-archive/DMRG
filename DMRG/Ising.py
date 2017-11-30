@@ -12,7 +12,7 @@ from spin import sigma
 def nearest(n, *ops, coef=1, sparse=False):
     '''Generate k nearest Hamiltonian term
     $$\sum_{i=0}^{n-k} \bigotimes_{j=0}^{k-1} \Omega^k_{i+j}$$
-    , k is number of operators
+    k is number of operators
 
     Args:
     n       length of chain
@@ -25,12 +25,14 @@ def nearest(n, *ops, coef=1, sparse=False):
     eye_n = np.eye(*ops[0].shape)
     coef *= np.ones(n)
     _kron = sps.kron if sparse else np.kron
+
     def _H_i(k):
         l = [eye_n for i in range(n)]
         for i, op in enumerate(ops):
-            l[k+i] = op
+            l[k + i] = op
         return reduce(_kron, l)
-    return sum(coef[k]*_H_i(k) for k in range(n+1-len(ops)))
+    return sum(coef[k] * _H_i(k) for k in range(n + 1 - len(ops)))
+
 
 def Hamilton_trans(n, g=0, J=1):
     H_tpl = '$H=-\sum_i JZ_iZ_{i+1} - \sum_i gX_i$'
@@ -39,40 +41,44 @@ def Hamilton_trans(n, g=0, J=1):
     H -= nearest(n, sigma[3], sigma[3], coef=J)
     H -= nearest(n, sigma[1], coef=g)
 
-    return {'H': H, 'H_template': H_tpl, 'n':n, 'J': J, 'g':g}
+    return {'H': H, 'H_template': H_tpl, 'n': n, 'J': J, 'g': g}
 
-def Hamilton_XX(n, delta=1/2, g=1):
+
+def Hamilton_XX(n, delta=1 / 2, g=1):
     H_tpl = '$H=-\sum (Z_iZ_{i+1}+\Delta X_iX_{i+1})-\sum g_iX_i$'
 
-    H=np.zeros([2**n, 2**n], dtype='complex128')
-    H-=nearest(n, sigma[1], coef=g)
-    H-=nearest(n, sigma[3], sigma[3])
-    H-=nearest(n, sigma[1], sigma[1], coef=delta)
+    H = np.zeros([2**n, 2**n], dtype='complex128')
+    H -= nearest(n, sigma[1], coef=g)
+    H -= nearest(n, sigma[3], sigma[3])
+    H -= nearest(n, sigma[1], sigma[1], coef=delta)
 
-    return {'H':H, 'H_template': H_tpl, 'n':n, 'delta': delta, 'g':g}
+    return {'H': H, 'H_template': H_tpl, 'n': n, 'delta': delta, 'g': g}
 
-def Hamilton_XZ(n, delta=1/2, g=1, h=0.1):
-    H_tpl= '$H=-\sum (X_iX_j+Y_iY_j+\Delta Z_iZ_j)+\sum (gX_i+hZ_i)$'
 
-    H=np.zeros([2**n, 2**n], dtype='complex128')
-    H-=nearest(n, sigma[1], sigma[1])
-    H-=nearest(n, sigma[2], sigma[2])
-    H-=nearest(n, sigma[3], sigma[3], coef=delta)
-    H+=nearest(n, sigma[1], coef=g)
-    H+=nearest(n, sigma[3], coef=h)
+def Hamilton_XZ(n, delta=1 / 2, g=1, h=0.1):
+    H_tpl = '$H=-\sum (X_iX_j+Y_iY_j+\Delta Z_iZ_j)+\sum (gX_i+hZ_i)$'
 
-    return {'H':H, 'H_template': H_tpl, 'n':n, 'delta': delta, 'g':g, 'h':h}
+    H = np.zeros([2**n, 2**n], dtype='complex128')
+    H -= nearest(n, sigma[1], sigma[1])
+    H -= nearest(n, sigma[2], sigma[2])
+    H -= nearest(n, sigma[3], sigma[3], coef=delta)
+    H += nearest(n, sigma[1], coef=g)
+    H += nearest(n, sigma[3], coef=h)
+
+    return {'H': H, 'H_template': H_tpl, 'n': n, 'delta': delta, 'g': g, 'h': h}
+
 
 def Hamilton_TL(n, J=1, g=0.945, h=0.8090):
     '''Transverse field Ising model with Longitudinal field'''
-    H_tpl= '$H=-\sum J Z_iZ_{i+1}+\sum (gX_i+hZ_i)$'
+    H_tpl = '$H=-\sum J Z_iZ_{i+1}+\sum (gX_i+hZ_i)$'
 
-    H=np.zeros([2**n, 2**n], dtype='complex128')
-    H+=nearest(n, sigma[3], sigma[3], coef=J)
-    H+=nearest(n, sigma[1], coef=g)
-    H+=nearest(n, sigma[3], coef=h)
+    H = np.zeros([2**n, 2**n], dtype='complex128')
+    H += nearest(n, sigma[3], sigma[3], coef=J)
+    H += nearest(n, sigma[1], coef=g)
+    H += nearest(n, sigma[3], coef=h)
 
-    return {'H':H, 'H_template': H_tpl, 'n':n, 'J': J, 'g':g, 'h':h}
+    return {'H': H, 'H_template': H_tpl, 'n': n, 'J': J, 'g': g, 'h': h}
+
 
 if __name__ == '__main__':
     '''Transverse field Ising model is an important test case for
