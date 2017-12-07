@@ -38,6 +38,9 @@ def rand_unitary(rho, amp=None, rs=np.random):
         return la.expm(amp*la.logm(U))
     return U
 
+def bitsign(x):
+    return 1-2*np.signbit(x)
+
 def rand_rotate(rho, amp=None, rs=np.random):
     U = rand_unitary(rho, amp, rs)
     return U@rho@U.T.conj()

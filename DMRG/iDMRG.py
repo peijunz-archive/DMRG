@@ -6,7 +6,7 @@ Use MPO to solve ground state energy
 import numpy as np
 import scipy.sparse.linalg as SL
 import scipy.linalg as LA
-from MPO import MPO
+from .MPO import MPO
 
 
 def halfshape(A):

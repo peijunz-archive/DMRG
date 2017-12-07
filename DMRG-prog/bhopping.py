@@ -15,6 +15,8 @@ from DMRG.MPS import State
 import numpy as np
 import scipy.linalg as la
 from functools import reduce
+from scipy.misc import imresize
+from pylab import *
 
 def a(n):
     return np.diag(np.sqrt(np.arange(1, n)), k=1)
@@ -30,30 +32,33 @@ def H1(n):
     H += H.T.conj()
     return H
 
-def init_state(s0, L):
+def init_state(s0, L, trun=10):
     s0 = np.array(s0)
     n = len(s0)
     ground = np.zeros([n])
     ground[0] = 1
-    M = [ground.reshape([1, n, 1]).copy() for i in range(n)]
+    M = [ground.reshape([1, n, 1]).copy() for i in range(L)]
     M[0] = s0.reshape([1, n, 1])
-    s = State(M, n, trun=20)
+    s = State(M, n, trun=trun)
     s.canon()
     return s
 
-def evolve(s, H, E, time, n=5, k=100):
+def evolve(s, H, E, time, n=5, k=20):
     p = s.copy()
-    l=[]
+    l=[[p.measure(i, E) for i in range(p.L)]]
     for i in range(n):
         p.iTEBD_double(H, time, k)
         s.canon()
-        print('Time {:.3f}, Overlap {:.5f}*exp({:.5f}j)'.format(
-            (i + 1) * time, np.abs(s.dot(p)), np.angle(s.dot(p))))
-        l.append(np.abs(s.dot(p)))
-        le=[p.measure(i, E) for i in range(5)]
-        print(le)
-    return l
+        le = [p.measure(i, E) for i in range(p.L)]
+        if le[-1] >= l[-1][-1]:
+            l.append(le)
+        else:
+            break
+        print("> Progress {:3d}/{:}".format(i, n), end='\r')
+    return np.array(l)
 
 if __name__ == '__main__':
-    s = init_state([5, 4, 3, 2, 1], 5)
-    evolve(s, H1(5), H0(5), time=1, n=30)
+    s = init_state([5, 4, 3, 2, 1], 30)
+    l = evolve(s, H1(5), H0(5), time=0.2, n=100)
+    l = imresize(l, [600, 600], 'nearest')
+    imsave('test.png', l)

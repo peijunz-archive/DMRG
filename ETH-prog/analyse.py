@@ -2,13 +2,14 @@ import numpy as np
 import scipy.linalg as la
 
 from numpy.random import RandomState
-from Ising import Hamilton_XZ, Hamilton_XX, Hamilton_TL
+from DMRG.Ising import Hamilton_XZ, Hamilton_XX, Hamilton_TL
 from ETH import Rho, Gibbs
 from ETH.optimization import *
 from pylab import *
 from ETH.basic import *
 from scipy.misc import imresize
 import os
+import cv2
 
 def uniform2(v, n, rs=np.random):
     if isinstance(v, tuple):
@@ -80,7 +81,7 @@ def testDiagonal(Hf, arg_tpl):
 def plot_rho(Hf, arg_tpl, zipper=False):
     res = np.load(fname(Hf, arg_tpl)).item()
     H, R, nit, S = res['H'], res['rho'], res['nit'], res['S']
-    path = info(Hf, arg_tpl)
+    path = 'data/'+info(Hf, arg_tpl)
     try:
         os.mkdir(path)
     except FileExistsError:
@@ -89,13 +90,15 @@ def plot_rho(Hf, arg_tpl, zipper=False):
     for i, s in enumerate(S):
         for j in range(nit):
             w, v = la.eigh(H[i,   j])
-            print(w)
             rho = v.T.conj()@R[i, j]@v
             good[i, j] = norm(diag(rho))/norm(rho)
-            imsave('{}/S={:04.2f}-{:02d}.png'.format(path, s, j), imresize(abs(rho), 800, 'nearest'))
+            img = abs(rho)
+            imsave('{}/S={:04.2f}-{:02d}-plain.png'.format(path, s, j), imresize(img, 800, 'nearest'))
+            img = (np.clip(np.log(np.clip(img/img.max(), 1e-25, None))+10, 0, None)*25).astype('uint8')
+            cv2.imwrite('{}/S={:04.2f}-{:02d}-log.png'.format(path, s, j), imresize(img, 800, 'nearest'))
     if zipper:
         os.system("zip {0}.zip {0}/*.png 1>/dev/null".format(path))
-    print(mean(good, axis=1))
+    #print(good)
 
 def loadData(Hf, arg_tpl, arg_opt=None, arg_clt=None):
     try:
@@ -143,9 +146,10 @@ def draw_diff_rho(Hf, arg_tpl, arg_opt, arg_clt):
         for j in range(nit):
             b = Gibbs.rho2beta(H[i, j], R[i, j])
             grho = Gibbs.beta2rho(H[i, j], b)
+            #print(b, grho)
             dif[i, j] = Rho.compare(R[i, j], grho)
             v = la.eigvalsh(H[i, j])
-            print("bE", b, b*(v[0]-v[-1]).real/len(v))
+            #print("bE", b, b*(v[0]-v[-1]).real)
     mdif=mean(dif, axis=1)
     sdif=std(dif, axis=1, ddof=1)/np.sqrt(nit)
     #print(dif[0, 0])
@@ -158,13 +162,36 @@ def draw_diff_rho(Hf, arg_tpl, arg_opt, arg_clt):
     ylabel(r'$|\mathrm{tr}[\rho-\rho_G]|$')
     legend();
     savefig(fname(Hf, arg_tpl, "figures", "rho-diff.pdf"))
+    print('-'*30)
+    print(mdif)
+    l = (mdif[:, n//2-1]+mdif[:, -n//2])/2
+
+    return l
+
+def diff_rho():
+    '''How to choose the entropy? Two parameters S and
+    random field factor g, see how large is the entanglement entropy'''
+    pass
 
 if __name__ == "__main__":
     rs=RandomState(164147)
-    for w in [0.25, 0.5, 1, 2, 4, 8]:
-        draw_diff_rho(Hamilton_XZ,
+    l = [0.01, 0.2, 0.5, 1, 2, 4, 8, 16]
+    ls=[]
+    for w in l:
+        ls.append(draw_diff_rho(Hamilton_XZ,
                       {"n":6, "delta":0.54, "g":(0, w)},
-                      {'nit':3000, 'E':5},
+                      {'nit':6000},
                       {'rs':rs, 'ns':10, 'nit':6})
-        plot_rho(Hamilton_XZ, {"n":6, "delta":0.54, "g":(0, w)})
-    #testConvergence(4, Hamilton_XZ, g=.1, rs=rs)
+        )
+        #plot_rho(Hamilton_XZ, {"n":6, "delta":0.54, "g":(0, w)})
+    ls = np.array(ls)
+    save('a.npy', ls)
+    print(ls.shape)
+    #ls = load('a.npy')
+    print(ls)
+    cax = matshow(ls.transpose())
+    cbar = colorbar(cax)
+    xlabel('g')
+    ylabel('S')
+    savefig('test.pdf')
+    #testConvergence(4, Hamilton_XZ, {"n":6, "delta":0.54, "g":(0, 0.25)})

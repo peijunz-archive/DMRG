@@ -31,8 +31,6 @@ class State:
     + o --- L+1: 0~L
     + x --- L+1: 0~L
     + v --- L+2: (-1), 0, 1,..., L-1, (L)
-
-    TODO Periodic boundary condition?
     '''
 
     def __init__(self, arg=(1, 1), dim=2, trun=20):

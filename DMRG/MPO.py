@@ -9,7 +9,7 @@ Operators are implemented for automatic generation:
 '''
 import numpy as np
 from ast import literal_eval
-from spin import sigma
+from .spin import sigma
 import copy
 
 op2 = dict(zip(('s0', 'sx', 'sy', 'sz'), sigma))

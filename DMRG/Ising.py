@@ -6,7 +6,7 @@ Tools to generate n-nearest interaction Hamiltonian.
 import numpy as np
 import scipy.sparse as sps
 from functools import reduce
-from spin import sigma
+from .spin import sigma
 
 
 def nearest(n, *ops, coef=1, sparse=False):

@@ -16,19 +16,20 @@ def gradient(H, rho, H2=None, err=0):
         H2=H@H
     E = trace2(rho, H)
     h = H2-(2*E)*H
-    M = 1j*commuteh(rho, h)
-    f1m = la.norm(M)**2
-    M2 = 1j*commuteh(rho, H)
-    Msq = la.norm(M2)**2
-    sigma = np.sqrt(energy_var(H, rho, H2))
-    if f1m > 0.1*sigma*Msq:
-        M_ = M
-    else:
-        M_ = M2
-    f1m_ = trace2(M_, M)
-    f2_ = trace2(commuteh(M_, rho), commuteh(M_, h)) - 2*trace2(M_, M2)**2
-    #print(sigma, f1m_.real, f2_.real)
-    return M_, f1m_.real, f2_.real
+    M = np.array([1j*commuteh(rho, h), 1j*commuteh(rho, H)])
+    n = M.shape[0]
+    l = la.norm(M, axis=(1, 2))
+    M /= l.reshape(-1,1,1)
+    scale = l[0]
+    _f1 = lambda m: scale * trace2(m, M[0]).real
+    _f2 = lambda m1, m2:trace2(commuteh(m1, rho), commuteh(m2, h)).real-_f1(m1)*_f1(m2)
+    nabla = np.array([_f1(m) for m in M])
+    Hessian = np.empty([n, n], dtype='double')
+    for i in range(n):
+        Hessian[i, i] = _f2(M[i], M[i])
+        for j in range(i+1, n):
+            Hessian[i, j] = Hessian[j, i] = _f2(M[i], M[j])
+    return M, nabla, Hessian
 
 #@profile
 def grad2(h, rho):
@@ -36,15 +37,6 @@ def grad2(h, rho):
     f1 = la.norm(M)**2
     f2 = trace2(commuteh(M, rho), commuteh(M, h))
     return M, f1.real, f2.real
-
-def Hessian(H, rho):
-    '''Hessian'''
-    A = sp.einsum("li,jk->ijkl", rho, H)
-    rh = rho@H/2
-    rh += rh.conj().T
-    A += sp.einsum("ki,jm->ijmk", rh, np.eye(*rho.shape))
-    A += sp.einsum("ijkl->klij", A)
-    return A
 
 #@profile
 def expm2_ersatz(h):
@@ -56,31 +48,30 @@ def expm2_ersatz(h):
     return U
 
 #@profile
-def minimize_rho(rho, f, df, meps=10, nit=100, err=0):
+def minimize_rho(rho, f, df, meps=0.5, nit=100, err=0):
     '''Add criteria for optimization'''
+    istep = 1/meps
     cur = np.inf
     for i in range(nit):
-        M, f1, f2 = df(rho)
-        if f2 <= f1/meps:
-            x = -meps
-        else:
-            x = -f1/f2
+        M, nabla, hessian = df(rho)
+        w, v = la.eigh(hessian)
+        nabla = v.T.conj()@nabla
+        step = - bitsign(nabla)/np.clip(w/np.abs(nabla), istep, None)
+        step = v@step
+        M_opt = np.einsum('i, ijk', step, M)
+        f1 = la.norm(nabla)
+        convex = all(w >= 0)
         for j in range(10):
-            #U = la.expm((-1j*x)*M)
-            U = expm2_ersatz((1j*x)*M)
+            U = expm2_ersatz((1j/2**j)*M_opt)
             rho_try = U@rho@U.T.conj()
             nxt = f(rho_try)
             if nxt < cur or (f1 == 0):
-                #print(cur, nxt-cur)
                 cur = nxt
                 rho = rho_try
                 break
-            #print("Bad", cur, nxt-cur)
-            x/=2
-        if ((i*10>nit) and j==9) or (f1 < err and f2 >= 0):
-            # Judge convergence
-            print("Stop at {} with f1={}, f2={}".format(i, f1, f2))
+        if ((i*10>nit) and j==9) or (f1 < err and convex):
             break
+    print("Stop at {} with f={}, f1={}, convex={}".format(i, cur, f1, convex))
     return rho
 
 def minimize_var_fix(H, rho, E, meps=10, nit=100, err=0):
