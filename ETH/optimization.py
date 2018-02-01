@@ -69,7 +69,7 @@ def minimize_rho(rho, f, df, meps=0.5, nit=100, err=0):
                 cur = nxt
                 rho = rho_try
                 break
-        if ((i*10>nit) and j==9) or (f1 < err and convex):
+        if ((i*10>nit) and j==9):# or (f1 < err and convex):
             break
     print("Stop at {} with f={}, f1={}, convex={}".format(i, cur, f1, convex))
     return rho

@@ -26,11 +26,12 @@ def svd_cut(m, x=20, err=1e-10):
     return u[:, :k], s, v[:k]
 
 
-class State:
+class MPS:
     '''Length:
     + o --- L+1: 0~L
     + x --- L+1: 0~L
     + v --- L+2: (-1), 0, 1,..., L-1, (L)
+    It is in B form, where M includes the right circle
     '''
 
     def __init__(self, arg=(1, 1), dim=2, trun=20):
@@ -83,11 +84,11 @@ class State:
         if isinstance(L[0], int):
             L = [(1, -1) if np.isinf(i) else (i, 1-i) for i in L]
         L = np.array(L)[:, nx, :, nx]
-        return State(L)
+        return MPS(L)
 
     def __getitem__(self, ind):
         '''(1-i)/i=1/i-1=a*exp(it), i=1/(1+a*exp(it))'''
-        return State.naive(ind).dot(self)
+        return self.naive(ind).dot(self)
 
     def shape(self, i):
         return self.xl[i], self.dim, self.xr[i]
@@ -256,21 +257,6 @@ class State:
     def update_k(self, U, i, k, unitary=True):
         '''General multiple sites update'''
         pass
-
-    def run_from(self, start, U, dt):
-        for i in range(start, self.L - 1, 2):
-            self.update_double(U, i)
-
-    def iTEBD_double(self, H, t, n=100):
-        '''Second Order Suzuki Trotter Expansion'''
-        dt = t / n
-        U = la.expm(-1j * H * dt).reshape([self.dim] * 4)
-        self.run_from(0, U, dt / 2)
-        for i in range(n - 1):
-            self.run_from(1, U, dt)
-            self.run_from(0, U, dt)
-        self.run_from(1, U, dt)
-        self.run_from(0, U, dt / 2)
 
     def copy(self):
         return copy.deepcopy(self)

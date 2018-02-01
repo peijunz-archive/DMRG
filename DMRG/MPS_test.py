@@ -1,14 +1,14 @@
 import unittest
 import numpy as np
 import scipy.linalg as la
-from MPS import State
-from spin import sigma
-import AKLT as ak
+from .MPS import MPS
+from .spin import sigma
+#import AKLT as ak
 
 class TestMPS(unittest.TestCase):
     def testCanon(self):
         '''Test unity of state and circle matrix s'''
-        s = State((1, 2, 2))
+        s = MPS((1, 2, 2))
         s.M[0][0, :, :] = np.array([[1, 2 + 1j], [9j, 6j]])
         s.M[1][:, :, 0] = np.array([[- 1j, 2 - 3j], [0.3, 4]])
         s.M[1][:, :, 1] = np.array([[5 - 1j, 2 - 3j], [0.3, 4]])
@@ -28,7 +28,7 @@ class TestMPS(unittest.TestCase):
 
     def testTwoBody(self):
         '''For Hamiltonian Z*Z, the eigenvec is ++, +-, -+, --'''
-        s = State.naive([1+3j, 1], [1-8j, 1-2j])
+        s = MPS.naive([1+3j, 1], [1-8j, 1-2j])
         eig_states = [[0, 0], [0, 1], [1, 0], [1, 1]]
         eig_vals = np.array([1, -1, -1, 1])
         s.canon()
@@ -48,13 +48,13 @@ class TestMPS(unittest.TestCase):
             self.assertAlmostEqual(la.norm(L - L0), 0)
         return True
 
-    def testAKLT(self):
-        '''TODO Incorporate AKLT.py into here'''
-        N = 20
-        s = ak.AKLT_State(N)
-        k = (N - 1) // 2
-        E = ak.Energy(s)
-        self.assertAlmostEqual(E/(N-1), -2/3)
+    #def testAKLT(self):
+        #'''TODO Incorporate AKLT.py into here'''
+        #N = 20
+        #s = ak.AKLT_State(N)
+        #k = (N - 1) // 2
+        #E = ak.Energy(s)
+        #self.assertAlmostEqual(E/(N-1), -2/3)
 
 
 if __name__ == "__main__":

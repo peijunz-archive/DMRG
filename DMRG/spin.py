@@ -10,7 +10,7 @@ def dof(S):
     return round(2 * S + 1)
 
 
-def I(S=1 / 2):
+def I(S=1/2):
     '''Identity Matrix'''
     return np.eye(dof(S))
 
@@ -18,7 +18,7 @@ def R(S=1/2):
     '''Reverse all the spins'''
     return I(S)[::-1]
 
-def Z(S=1 / 2):
+def Z(S=1/2):
     '''S_z spin matrix'''
     return np.diag(np.arange(S, -S - 0.1, -1))
 

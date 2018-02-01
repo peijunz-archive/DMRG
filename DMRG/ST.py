@@ -5,8 +5,9 @@ def nothing(k):
 def ST2(f_list, n):
     if len(f_list)<2:
         f_list = list(f_list) + [nothing]
-    half = [f(1/2) for f in f_list[:-1]]
-    full = [f_list[0](1), f_list[-1](1)]
+    delta = 1./n
+    half = [f(delta/2) for f in f_list[:-1]]
+    full = [f_list[0](delta), f_list[-1](delta)]
     def middle():
         for h in half[1:]:
             h()
@@ -22,7 +23,8 @@ def ST2(f_list, n):
     half[0]()
 
 def ST1(f_list, n):
-    full = [f(1) for f in f_list]
+    delta = 1./n
+    full = [f(delta) for f in f_list]
     for i in range(n):
         for f in full:
             f()

@@ -46,7 +46,7 @@ def Collect(Hf, arg_tpl, arg_opt, rs=np.random, ns=11, nit=10):
         for j in range(nit):
             print("itering", j)
             H4=Hf(**generate_args(arg_tpl, rs))['H']
-            rho = Rho.rho_prod_even(n, s)#rand_rotate(, np.random)
+            rho = rand_rotate(Rho.rho_prod_even(n, s), rs=np.random)
             H[i, j] = H4
             R[i, j] = minimize_var(H4, rho, **arg_opt)
     result = {'Hamilton':Hf.__name__, 'S': S, 'nit':nit, 'rho':R, 'H':H, **arg_tpl}
@@ -102,6 +102,7 @@ def plot_rho(Hf, arg_tpl, zipper=False):
 
 def loadData(Hf, arg_tpl, arg_opt=None, arg_clt=None):
     try:
+        print(fname(Hf, arg_tpl))
         return np.load(fname(Hf, arg_tpl)).item()
     except FileNotFoundError:
         return Collect(Hf, arg_tpl, arg_opt, **arg_clt)
@@ -175,23 +176,23 @@ def diff_rho():
 
 if __name__ == "__main__":
     rs=RandomState(164147)
-    l = [0.01, 0.2, 0.5, 1, 2, 4, 8, 16]
+    l = [0.01, 16, 0.2, 8, 0.5, 4, 1, 2]
     ls=[]
     for w in l:
         ls.append(draw_diff_rho(Hamilton_XZ,
                       {"n":6, "delta":0.54, "g":(0, w)},
-                      {'nit':6000},
+                      {'nit':2000},
                       {'rs':rs, 'ns':10, 'nit':6})
         )
         #plot_rho(Hamilton_XZ, {"n":6, "delta":0.54, "g":(0, w)})
-    ls = np.array(ls)
-    save('a.npy', ls)
-    print(ls.shape)
-    #ls = load('a.npy')
-    print(ls)
-    cax = matshow(ls.transpose())
-    cbar = colorbar(cax)
-    xlabel('g')
-    ylabel('S')
-    savefig('test.pdf')
+    #ls = np.array(ls)
+    #save('a.npy', ls)
+    #print(ls.shape)
+    ##ls = load('a.npy')
+    #print(ls)
+    #cax = matshow(ls.transpose())
+    #cbar = colorbar(cax)
+    #xlabel('g')
+    #ylabel('S')
+    #savefig('test.pdf')
     #testConvergence(4, Hamilton_XZ, {"n":6, "delta":0.54, "g":(0, 0.25)})
