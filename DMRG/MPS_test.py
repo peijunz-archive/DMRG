@@ -3,7 +3,7 @@ import numpy as np
 import scipy.linalg as la
 from .MPS import MPS
 from .spin import sigma
-#import AKLT as ak
+from . import AKLT as ak
 
 class TestMPS(unittest.TestCase):
     def testCanon(self):
@@ -48,13 +48,18 @@ class TestMPS(unittest.TestCase):
             self.assertAlmostEqual(la.norm(L - L0), 0)
         return True
 
-    #def testAKLT(self):
-        #'''TODO Incorporate AKLT.py into here'''
-        #N = 20
-        #s = ak.AKLT_State(N)
-        #k = (N - 1) // 2
-        #E = ak.Energy(s)
-        #self.assertAlmostEqual(E/(N-1), -2/3)
+    def testAKLT(self):
+        '''Incorporate AKLT.py into here'''
+        N = 11
+        s = ak.AKLT_State(N)
+        k = (N - 1) // 2
+        E = ak.Energy(s)
+        self.assertAlmostEqual(E/(N-1), -2/3)
+        s.canon()
+        n=5
+        l1 = ak.evolve(s, n=n, time=1, k=10)
+        l2 = np.exp(-1j*E*(np.arange(n)+1))
+        np.testing.assert_allclose(l1, l2)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 from DMRG import spin
-from DMRG.MPS import State
+from DMRG.MPS import MPS
 import numpy as np
 import scipy.linalg as la
 from functools import reduce
@@ -16,7 +16,7 @@ def AKLT_State(n=30):
     M = [A.copy() for i in range(n)]
     M[0] = M[0][:1]
     M[-1] = M[-1][:, :, 1:]
-    s = State(M, 3)
+    s = MPS(M, 3)
     s.canon()
     return s
 
@@ -50,7 +50,7 @@ def evolve(s, time=0.1, n=5, k=40):
         s.canon()
         print('Time {:.3f}, Overlap {:.5f}*exp({:.5f}j)'.format(
             (i + 1) * time, np.abs(s.dot(p)), np.angle(s.dot(p))))
-        l.append(np.abs(s.dot(p)))
+        l.append(s.dot(p))
     return l
 
 def Z(s):
@@ -77,9 +77,9 @@ def correlator(s):
             assert np.abs(s.corr(*l)-s.measure(*oneop(l)))<1e-13
 
 if __name__ == "__main__":
-    N=21
+    N=19
     s = AKLT_State(N)
-    s.update_single(spin.P(1), (N-1)//2)
+    #s.update_single(spin.P(1), (N-1)//2)
     s.canon()
     l=evolve(s, n=N*2, time=1, k=20)
     print(l)

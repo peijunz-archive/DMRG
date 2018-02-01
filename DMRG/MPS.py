@@ -7,6 +7,7 @@ import math
 import numpy as np
 import scipy.linalg as la
 import copy
+from . import ST
 
 nx = np.newaxis
 
@@ -257,6 +258,21 @@ class MPS:
     def update_k(self, U, i, k, unitary=True):
         '''General multiple sites update'''
         pass
+
+    def iTEBD_double(self, H, t, n):
+        def even_update(k):
+            U = la.expm(-1j * H * k * t).reshape([self.dim] * 4)
+            def _even_update():
+                for i in range(0, self.L - 1, 2):
+                    self.update_double(U, i)
+            return _even_update
+        def odd_update(k):
+            U = la.expm(-1j * H * k * t).reshape([self.dim] * 4)
+            def _odd_update():
+                for i in range(1, self.L - 1, 2):
+                    self.update_double(U, i)
+            return _odd_update
+        ST.ST2((even_update, odd_update), n)
 
     def copy(self):
         return copy.deepcopy(self)
