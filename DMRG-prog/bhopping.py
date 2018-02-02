@@ -19,16 +19,25 @@ from functools import reduce
 from scipy.misc import imresize
 from pylab import *
 
+@np.vectorize
+def dist(t):
+    return (t+np.pi)%(2*np.pi)-np.pi
+
 class BMPS(MPS):
-    def __init__(self, s0, L, trun=10):
-        dim = len(s0)
-        ground = np.zeros(dim)
-        ground[0] = 1
-        M = [ground.reshape([1, dim, 1]).copy() for i in range(L)]
-        M[0] = np.array(s0).reshape([1, dim, 1])
+    def __init__(self, dim, L, para, pack=None, trun=10):
+        self.dim = dim
+        M = [self.zero().reshape([1, dim, 1]) for i in range(L)]
+        #M[0] = np.array(s0).reshape([1, dim, 1])
         super().__init__(M, dim, trun=trun)
         self.canon()
-        self.setH()
+        self.setH(*para)
+        if pack:
+            self.set_wavepacket(*pack)
+
+    def zero(self):
+        ground = np.zeros(self.dim)
+        ground[0] = 1
+        return ground
 
     def p(self, i):
         p = np.zeros(self.dim)
@@ -36,21 +45,27 @@ class BMPS(MPS):
             p[i] = 1
         return np.diag(p)
 
-    def setH(self, omega=1, g=1, u=1, h=1):
+    def setH(self, omega0, g, u, h):
+        self.omega0 = omega0
+        self.g = g
+        self.u = u
+        self.h = h
         self.a = np.diag(np.sqrt(np.arange(1, self.dim)), k=1)
+        self.a_p = self.a.T.conj()
         # Resonance Cavity
-        self.H0 = omega*np.diag(np.arange(self.dim))
+        self.H0 = omega0*np.diag(np.arange(self.dim))
         # Tail
         self.tail = True
+        self.LL = self.L - self.tail
         self.Ht = u*np.diag(np.arange(self.dim))
         # Tail coupling
         self.O = np.empty((self.dim,)*4)
         for i in range(self.dim):
             for j in range(self.dim):
                 self.O[i, j]=self.p(j-i)
-        self.Htc = h*(self.a.T.conj()+self.a)
+        self.Htc = h*(self.a_p+self.a)
         # Interaction Hamiltonian between nearest neighbor
-        self.H1 = np.kron(self.a.T.conj(), self.a)
+        self.H1 = np.kron(self.a_p, self.a)
         self.H1 += self.H1.T.conj()
         self.H1 *= g
 
@@ -81,24 +96,24 @@ class BMPS(MPS):
             self.xr[i] = shape[-1]
         self.canon()
 
-    def evolve(self, t, n=100, enable_tail=True):
+    def evolve(self, t, n=100, enable_tail=False):
         def even_update(k):
             U = la.expm(-1j * self.H1 * k * t).reshape([self.dim] * 4)
             def _even_update():
-                for i in range(0, self.L - 1 - self.tail, 2):
+                for i in range(0, self.LL - 1, 2):
                     self.update_double(U, i)
             return _even_update
         def odd_update(k):
             U = la.expm(-1j * self.H1 * k * t).reshape([self.dim] * 4)
             def _odd_update():
-                for i in range(1, self.L - 1 - self.tail, 2):
+                for i in range(1, self.LL - 1, 2):
                     self.update_double(U, i)
             return _odd_update
         def single(k):
             U1 = la.expm(-1j * self.H0 * k * t)
             U2 = la.expm(-1j * self.Ht * k * t)
             def _single():
-                for i in range(self.L - self.tail):
+                for i in range(self.LL):
                     self.update_single(U1, i)
                 self.update_single(U2, self.L - self.tail)
             return _single
@@ -111,66 +126,52 @@ class BMPS(MPS):
             ST2((even_update, odd_update, single, tail), n)
         else:
             ST2((even_update, odd_update, single), n)
-            
-    def test(self, t):
-        U1 = la.expm(-t*1j * self.H0)
-        U2 = la.expm(-t*1j * self.H1).reshape([self.dim] * 4)
-        for i in range(self.L - self.tail):
-            self.update_single(U1, i)
-        #self.update_single(U2, self.L - self.tail)
-        #self.update_single(U1, 0)
-        for i in range(0, self.L - 1 - self.tail, 2):
-            self.update_double(U2, i)
-        #self.update_double(U2, 0)
-        for i in range(self.L - self.tail):
-            self.update_single(U1, i)
-        #self.update_single(U2, self.L - self.tail)
-        #self.update_single(U1, 0)
-        for i in range(0, self.L - 1 - self.tail, 2):
-            self.update_double(U2, i)
-        #self.update_double(U2, 0)
-        #print(s.M[0])
-        #print(s.measure(0, s.H0))
-        #print(s.measure(0, s.p(0)))
-        #print(s.measure(0, s.p(1)))
-        #print(s.measure(0, s.p(2)))
-        #print(s.measure(0, s.p(3)))
-        #print(s.measure(0, s.p(4)))
-        
-    def evolve_measure(self, time, n=5, k=1):
+
+    def evolve_measure(self, time, n=5, k=10, tail=True):
         #p = self.copy()
-        l=[[self.measure(i, self.H0) for i in range(self.L)]]
+        l=[[self.measure(i, self.H0) for i in range(self.LL)]]
+        print(l)
         for i in range(n):
-            self.evolve(time, k)
-            #self.canon()
-            le = [self.measure(i, self.H0) for i in range(self.L)]
+            self.evolve(time, k, tail)
+            self.canon()
+            le = [self.measure(i, self.H0) for i in range(self.LL)]
             #if le[-1] >= l[-1][-1]:
             l.append(le)
             #else:
                 #break
-            #print("> Progress {:3d}/{:}".format(i, n), end='\r')
+            print("> Progress {:3d}/{:}".format(i, n), end='\r')
         return np.array(l)
 
+    def omega(self, k):
+        return self.omega0 - 2*g*np.cos(k)
+
+    def coef(self, k, bias=0):
+        return np.exp(1j * k * dx)
+
+    def wavepacket(self, dk, bias, k_c):
+        dx = np.arange(self.LL)-bias
+        k = 2*np.pi*np.arange(self.LL)/self.LL
+        f_k = np.exp(-(dist(k-k_c)/dk)**2/2)
+        N_k = np.exp(1j * dx[:, np.newaxis] * k[np.newaxis, :])
+        #print((dx[:, np.newaxis] * k[np.newaxis, :]).transpose())
+        #print(N_k.transpose())
+        return N_k @ f_k
+
+    def set_wavepacket(self, dk, bias, k_c=np.pi/2, n=1):
+        c_n = self.wavepacket(dk, bias, k_c)
+        c_n /= la.norm(c_n)/n
+        for i in range(self.LL):
+            coh = la.expm(c_n[i]*self.a_p)@self.zero()
+            coh /= la.norm(coh)
+            self.M[i][0, :, 0] = coh
+
 if __name__ == '__main__':
-    s = BMPS([0, 1j, 0, 0, 2j], 10)
-    #s = BMPS([0, 0, 0, 0, 1], 10)
-    print(array([s.measure(i, s.H0) for i in range(s.L)]))
-    for i in range(1):
-        s.evolve(1, 1000, False)
-        #self.canon()
-        print(array([s.measure(i, s.H0) for i in range(s.L)]))
+    s = BMPS(6, 41, para=(1, 0.1, 10, 0.1), pack=(1, 5, -np.pi/2))
+    l = s.evolve_measure(10, 20, tail=False)
+    print(l)
     #l = s.evolve(10, 20, False)
     ##l = s.test(1)
-    print(np.save("rho2", einsum("ijk, ilk->jl", s.M[0], s.M[0].conj())))
-    print(*s.Sr)
-    print(s.measure(3, s.H0))
-    print(s.measure(3, s.p(0)))
-    print(s.measure(3, s.p(1)))
-    print(s.measure(3, s.p(2)))
-    print(s.measure(3, s.p(3)))
-    print(s.measure(3, s.p(4)))
     #print(l/l[0,0])
     #print(s.M[0])
-    #l = imresize(l, [600, 600], 'nearest')
-    #imsave('test.png', l)
-    #s.test()
+    l = imresize(l, [600, 600], 'nearest')
+    imsave('test.png', l)
