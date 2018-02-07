@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 '''
 iTEBD for free bosons with nearest hopping
 
@@ -24,15 +25,14 @@ def dist(t):
     return (t+np.pi)%(2*np.pi)-np.pi
 
 class BMPS(MPS):
-    def __init__(self, dim, L, para, pack=None, trun=10):
+    def __init__(self, dim, L, para, pack, trun=10):
         self.dim = dim
         M = [self.zero().reshape([1, dim, 1]) for i in range(L)]
         #M[0] = np.array(s0).reshape([1, dim, 1])
         super().__init__(M, dim, trun=trun)
         self.canon()
-        self.setH(*para)
-        if pack:
-            self.set_wavepacket(*pack)
+        self._init_H(**para)
+        self._init_wavepacket(**pack)
 
     def zero(self):
         ground = np.zeros(self.dim)
@@ -45,7 +45,7 @@ class BMPS(MPS):
             p[i] = 1
         return np.diag(p)
 
-    def setH(self, omega0, g, u, h):
+    def _init_H(self, omega0, g, u, h):
         self.omega0 = omega0
         self.g = g
         self.u = u
@@ -53,7 +53,7 @@ class BMPS(MPS):
         self.a = np.diag(np.sqrt(np.arange(1, self.dim)), k=1)
         self.a_p = self.a.T.conj()
         # Resonance Cavity
-        self.H0 = omega0*np.diag(np.arange(self.dim))
+        self.H0 = omega0 * np.diag(np.arange(self.dim))
         # Tail
         self.tail = True
         self.LL = self.L - self.tail
@@ -99,12 +99,14 @@ class BMPS(MPS):
     def evolve(self, t, n=100, enable_tail=False):
         def even_update(k):
             U = la.expm(-1j * self.H1 * k * t).reshape([self.dim] * 4)
+            #@profile
             def _even_update():
                 for i in range(0, self.LL - 1, 2):
                     self.update_double(U, i)
             return _even_update
         def odd_update(k):
             U = la.expm(-1j * self.H1 * k * t).reshape([self.dim] * 4)
+            #@profile
             def _odd_update():
                 for i in range(1, self.LL - 1, 2):
                     self.update_double(U, i)
@@ -112,13 +114,15 @@ class BMPS(MPS):
         def single(k):
             U1 = la.expm(-1j * self.H0 * k * t)
             U2 = la.expm(-1j * self.Ht * k * t)
+            #@profile
             def _single():
                 for i in range(self.LL):
                     self.update_single(U1, i)
-                self.update_single(U2, self.L - self.tail)
+                self.update_single(U2, self.LL)
             return _single
         def tail(k):
             mpo = self.MPO(k * t)
+            #@profile
             def _tail():
                 self.update_MPO(mpo)
             return _tail
@@ -143,13 +147,10 @@ class BMPS(MPS):
         return np.array(l)
 
     def omega(self, k):
-        return self.omega0 - 2*g*np.cos(k)
+        return self.omega0 + 2*g*np.cos(k)
 
-    def coef(self, k, bias=0):
-        return np.exp(1j * k * dx)
-
-    def wavepacket(self, dk, bias, k_c):
-        dx = np.arange(self.LL)-bias
+    def _wavepacket(self, dk, center, k_c):
+        dx = np.arange(self.LL)-center
         k = 2*np.pi*np.arange(self.LL)/self.LL
         f_k = np.exp(-(dist(k-k_c)/dk)**2/2)
         N_k = np.exp(1j * dx[:, np.newaxis] * k[np.newaxis, :])
@@ -157,8 +158,15 @@ class BMPS(MPS):
         #print(N_k.transpose())
         return N_k @ f_k
 
-    def set_wavepacket(self, dk, bias, k_c=np.pi/2, n=1):
-        c_n = self.wavepacket(dk, bias, k_c)
+    def _init_wavepacket(self, dk, center, k_c=np.pi/2, n=1, trun=True):
+        c_n = self._wavepacket(dk, center, k_c)
+        if trun:
+            lb, rb = center-self.LL//2, center+self.LL//2
+            print(lb, rb)
+            if lb >= 0:
+                c_n[:lb+1] = 0
+            if rb <= self.LL-1:
+                c_n[rb:] = 0
         c_n /= la.norm(c_n)/n
         for i in range(self.LL):
             coh = la.expm(c_n[i]*self.a_p)@self.zero()
@@ -166,9 +174,11 @@ class BMPS(MPS):
             self.M[i][0, :, 0] = coh
 
 if __name__ == '__main__':
-    s = BMPS(6, 41, para=(1, 0.1, 10, 0.1), pack=(1, 5, -np.pi/2))
-    l = s.evolve_measure(10, 20, tail=False)
-    print(l)
+    H = {"omega0":1, "g":0.1, "u":10, "h":0.1}
+    wavepack = {"dk":0.3, "center":10, "k_c":-np.pi/2, "trun":False}
+    s = BMPS(6, 61, H, wavepack)
+    l = s.evolve_measure(13, 15, tail=False)
+    save("untruncated2.npy", l)
     #l = s.evolve(10, 20, False)
     ##l = s.test(1)
     #print(l/l[0,0])

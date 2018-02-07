@@ -35,7 +35,7 @@ class MPS:
     It is in B form, where M includes the right circle
     '''
 
-    def __init__(self, arg=(1, 1), dim=2, trun=20):
+    def __init__(self, arg=(1, 1), dim=2, trun=20, err=1e-6):
         '''
         arg may be x or M, only one of them is needed.
         x is an array of truncation length with list length n+1,
@@ -57,6 +57,7 @@ class MPS:
         self.s[0] = np.ones(self.x[0])
         self.canonical = False
         self.trun = trun
+        self.err = err
 
     def from_x(self, x, dim):
         self.dim = dim
@@ -134,7 +135,7 @@ class MPS:
         after = (self.xl[i], self.dim, -1)
         self.M[i] *= self.Sl[i][:, nx, nx]
         # SVD
-        u, s, v = svd_cut(self.M[i].reshape(before), self.trun)
+        u, s, v = svd_cut(self.M[i].reshape(before), self.trun, self.err)
         # Post job
         self.M[i] = u.reshape(after)
         self.xr[i] = len(s)
@@ -148,7 +149,7 @@ class MPS:
         after = (-1, self.dim, self.xr[i])
         self.M[i] *= self.Sr[i][nx, nx]
         # SVD
-        u, s, v = svd_cut(self.M[i].reshape(before), self.trun)
+        u, s, v = svd_cut(self.M[i].reshape(before), self.trun, self.err)
         # Post job
         self.M[i] = v.reshape(after)
         self.xl[i] = len(s)
@@ -228,12 +229,14 @@ class MPS:
         ret = np.einsum('abd, aed, be', s, s.conj(), op)
         return ret.real if Hermitian else ret
 
+    #@profile
     def update_single(self, U, i, unitary=True):
         '''Apply U at single site i'''
         self.M[i] = np.einsum('lcr, dc->ldr', self.M[i], U)
         if not unitary:
             self.ortho_left_site(i)
 
+    #@profile
     def update_double(self, U, i, unitary=True):
         '''Double site i, i+1 ?unitary update
 
@@ -245,7 +248,7 @@ class MPS:
         mb = np.einsum('lcr, rjk, abcj->labk', self.B(i), self.B(i + 1), U)
         m = self.Sl[i][:, nx, nx, nx] * mb
         sh = m.shape
-        u, s, v = svd_cut(m.reshape(sh[0] * sh[1], -1), self.trun)
+        u, s, v = svd_cut(m.reshape(sh[0] * sh[1], -1), self.trun, self.err)
         self.xr[i] = len(s)
         u = u.reshape(*sh[:2], -1)
         v = v.reshape(-1, *sh[2:])
