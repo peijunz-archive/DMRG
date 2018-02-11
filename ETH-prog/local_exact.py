@@ -121,33 +121,53 @@ class Layers:
         return varE
 
     def minimizeVar_steps(self):
-        for i, sp in enumerate(self.indexes):
-            yield sp, self.contract_until(self.H, i), self.contract_until(self.H2, i)
-
-    def minimizeVar_steps_fast(self):
         '''Contract all to rho as initial!'''
         rho = self.rho
         H = self.contract_op(self.indexes[1:], self.H, hc=True)
         H2 = self.contract_op(self.indexes[1:], self.H2, hc=True)
-        r = self.indexes[0]
-        yield r, self.contract_hole(rho, H, r), self.contract_hole(rho, H2, r)
+        mid = self.indexes[0]
+        yield mid, self.contract_hole(rho, H, mid), self.contract_hole(rho, H2, mid)
 
-        for l, r in zip(self.indexes[:-1], self.indexes[1:]):
+        for l, mid in zip(self.indexes[:-1], self.indexes[1:]):
+            # March to new U
             rho = self.contract_op((l,), rho)
-            V = self.contract_hole(rho, H, r, middle=False)
-            V2 = self.contract_hole(rho, H2, r, middle=False)
-            H = self.contract_op((r,), H)
-            H2 = self.contract_op((r,), H2)
-            yield r, V, V2
+            # Contract
+            V = self.contract_hole(rho, H, mid, middle=False)
+            V2 = self.contract_hole(rho, H2, mid, middle=False)
+            # Retreat
+            H = self.contract_op((mid,), H)
+            H2 = self.contract_op((mid,), H2)
+            yield mid, V, V2
 
-    def minimizeVar_cycle(self):
-        for sp, V, V2 in self.minimizeVar_steps():
-            self[sp], var = opt.minimize_var_local(V, V2, self[sp])
-        return var
+    def minimizeVar_steps_back(self):
+        '''Contract all to rho as initial!
+        Need to contract to H
+        '''
+        rho = self.contract_op(self.indexes[:-1], self.rho)
+        H = self.H
+        H2 = self.H2
+        mid = self.indexes[-1]
+        yield mid, self.contract_hole(rho, H, mid), self.contract_hole(rho, H2, mid)
 
-    def minimizeVar_cycle_fast(self):
-        for sp, V, V2 in self.minimizeVar_steps_fast():
+        for mid, r in zip(self.indexes[:-1][::-1], self.indexes[1:][::-1]):
+            # March to new U
+            H = self.contract_op((r,), H, hc=True)
+            H2 = self.contract_op((r,), H2, hc=True)
+            # Retreat
+            rho = self.contract_op((mid,), rho, hc=True)
+            # Contract
+            V = self.contract_hole(rho, H, mid)
+            V2 = self.contract_hole(rho, H2, mid)
+            yield mid, V, V2
+
+    def minimizeVar_cycle(self, forward=True):
+        if forward:
+            steps = self.minimizeVar_steps()
+        else:
+            steps = self.minimizeVar_steps_back()
+        for sp, V, V2 in steps:
             self[sp], var = opt.minimize_var_local(V, V2, self[sp])
+            print("sub", var)
         return var
 
     def minimizeVar(self, n=100, rel=1e-10):
@@ -181,8 +201,6 @@ if __name__ == "__main__":
     #minimize_local(H, rho, d, n)
     Y = Layers(rho, H, depth=d)
     #Y.minimizeVarE_cycle_fast()
-    for i in range(10):
-        print(Y.minimizeVar_cycle())
     #print("Second")
     #for sp, V in Y.minimizeVarE_steps(Y.H2):
         #print(sp, V.sum())
@@ -193,5 +211,5 @@ if __name__ == "__main__":
 
     #Em = min_expect(rho, H@H)
     #print(0, Em, Y.contract_all(Y.H2))
-    #for i in range(9):
-        #print(i+1, Em, Y.minimizeVarE())
+    for i in range(10):
+        print(i, Y.minimizeVar_cycle(forward=True))
