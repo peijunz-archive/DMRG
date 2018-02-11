@@ -5,13 +5,18 @@ from ETH.optimization_test import min_expect
 
 
 class Layers:
-    def __init__(self, L, rho, H, depth=4):
+    def __init__(self, rho, H, depth=4, L=None, dim=2):
+        '''TODO '''
         self.D = depth
-        self.L = L
+        if L is None:
+            self.L = np.int(np.log2(H.size)/np.log2(dim**2))
+        else:
+            self.L = L
         self.d = (self.D + 1) // 2
-        self.l = L - 1
+        self.l = self.L - 1
         self.rho = rho
         self.H = H
+        self.H2 = H@H
         U = np.array([np.eye(4)
                       for i in range(self.d * self.l)], dtype='complex')
         self.U = U.reshape(self.d, self.l, 4, 4)
@@ -51,20 +56,20 @@ class Layers:
             # return op2.reshape(*op.shape, 4, 4)
             return op2
 
-    def contract_all(self):
+    def contract_rho(self):
         rho = self.rho.copy()
         for ind in self.visit_all:
             #H = transform_sites(H, self[ind], ind[1], brk)
             rho = self.transform_sites(rho, self[ind], ind[1])
             rho = self.transform_sites(rho, self[ind].conj(), ind[1], off=self.L)
         N = 2**self.L
-        H = self.H.reshape(N, N)
-        rho = rho.reshape(N, N)
-        return np.einsum('ij, ji', H, rho).real
+        return rho.reshape(N, N)
 
-    def contract_except(self, sp):
-        '''Contract all U to rho'''
-        H = self.H.copy()
+    def contract_except(self, H, sp):
+        '''Contract all U to rho
+        Args:
+        H   Hermitian operator to contract
+        '''
         rho = self.rho.copy()
         for ind in self.visit_all:
             brk = (ind != sp)
@@ -77,10 +82,10 @@ class Layers:
         rho = rho.reshape(N, N, 4**4)
         return np.einsum('ij, jik->k', H, rho).reshape(4, 4, 4, 4)
 
-    def contract_until(self, sp):
+    #@profile
+    def contract_until(self, H, sp):
         '''Contract part of U to rho, part to H
         Faster than former'''
-        H = self.H.copy()
         rho = self.rho.copy()
         for ind in self.visit_all:
             #print(ind, sp)
@@ -98,7 +103,7 @@ class Layers:
         rho = rho.reshape(sh2)
         return np.einsum('ijklmn, lonipk->ompj', H, rho)
 
-    def contractV(self, sp, until=True):
+    def contractV(self, H, sp, until=True):
         '''
         Aim function
         =hole_{ijkl}U_{ji}U_{lk}^*
@@ -111,34 +116,81 @@ class Layers:
         V_{lkji}=V_{ijkl}*, f=V_{ijkl}U_{ij}U_{kl}^+
         '''
         if until:
-            hole = self.contract_until(sp)
+            hole = self.contract_until(H, sp)
         else:
-            hole = self.contract_except(sp)
+            hole = self.contract_except(H, sp)
         V = hole.transpose([1, 0, 2, 3])
         return V
 
-    def update(self):
+    def minimizeVarE_steps(self, H2):
         for sp in self.visit_all:
-            V = self.contractV(sp)
-            self[sp] = opt.optimize_quadratic(V, self[sp])
-        return self.contract_all()
-        #sp = self.visit_all[0]
-        #V = self.contractV(sp)
-        #self[sp] = opt.optimize_quadratic(V, self[sp])
+            yield sp, self.contractV(H2, sp)
 
+    def minimizeVarE_steps_fast(self, H2):
+        for sp in self.visit_all:
+            yield sp, self.contractV(H2, sp)
+
+    def minimizeVarE_cycle(self, E=0):
+        H2 = self.H2-(2*E)*self.H+E**2*np.eye(*self.H.shape)
+        for sp, V in self.minimizeVarE_steps(H2):
+            self[sp], varE = opt.minimize_quadratic_local(V, self[sp])
+        return varE
+
+    def minimizeVar_steps(self):
+        for sp in self.visit_all:
+            yield sp, self.contractV(self.H, sp), self.contractV(self.H2, sp)
+
+
+    def minimizeVar_cycle(self):
+        for sp, V, V2 in self.minimizeVar_steps():
+            self[sp], var = opt.minimize_var_local(V, V2, self[sp])
+        return var
+
+    #@profile
+    #def minimizeVar_step(self):
+        #for sp in self.visit_all:
+            #V = self.contractV(self.H, sp)
+            #V2 = self.contractV(self.H2, sp)
+            #self[sp], var = opt.minimize_var_local(V, V2, self[sp])
+        #return var
+
+    def minimizeVar(self, n=100, rel=1e-10):
+        last = np.inf
+        for i in range(n):
+            cur = self.minimizeVar_cycle()
+            print(i, cur)
+            if last-cur < rel*cur:
+                break
+            last=cur
+        return cur
+
+def minimize_local(H, rho, depth=4, L=None, dim=2, n=100, rel=1e-6):
+    Y = Layers(rho, H, depth=depth, L=L, dim=dim)
+    Y.minimizeVar(n=n, rel=rel)
+    return Y.contract_rho()
 
 if __name__ == "__main__":
+    from analyse import generate_args
     from ETH import Rho
     from DMRG.Ising import Hamilton_XZ, Hamilton_XX
-    n = 3   # dof = 2**(2n) = 64
-    d = 4   # At least 2**(2(n-2))
+    n = 6   # dof = 2**(2n) = 64
+    d = 2   # At least 2**(2(n-2))
+    arg_tpl = {"n": n, "delta": 0.54, "g": 0.1}
     H = Hamilton_XZ(n)['H']
-    H2 = H@H
-    # print(H)
-    rho = Rho.rho_prod_even(n, 0.6*n)
-    print(rho.shape, H.shape)
-    Y = Layers(n, rho, H2, depth=d)
-    print(Y.visit_all)
-    Em = min_expect(rho, H2)
-    for i in range(1000):
-        print(i, Em, Y.update())
+    #print(H)
+    rho = Rho.rho_prod_even(n, 3.33333333333333333)
+    #H, rho = np.load('H.npy'), 
+    #rho = np.load('rho.npy')
+    #print(la.eigh(rho))
+    minimize_local(H, rho, d, n)
+    #Y = Layers(rho, H, depth=d)
+    #print(Y.minimizeVar_cycle())
+    #print("All Unitaries", Y.visit_all)
+    #mins = opt.exact_min_var(H, rho)
+    #print(mins)
+    #Y.minimizeVar()
+
+    #Em = min_expect(rho, H@H)
+    #print(0, Em, Y.contract_all(Y.H2))
+    #for i in range(9):
+        #print(i+1, Em, Y.minimizeVarE())

@@ -4,10 +4,11 @@ import scipy.linalg as la
 from numpy.random import RandomState
 from DMRG.Ising import Hamilton_XZ, Hamilton_XX, Hamilton_TL
 from ETH import Rho, Gibbs
-from ETH.optimization import *
+import ETH.optimization as opt
 from pylab import *
 from ETH.basic import *
 from scipy.misc import imresize
+from local_exact import minimize_local
 import os
 import cv2
 
@@ -39,10 +40,12 @@ def fname(Hf, arg_tpl, path="data", post='npy'):
 
 
 def generate_args(arg_tpl, rs=np.random):
-    return {k: uniform2(v, arg_tpl['n'], rs) for k, v in arg_tpl.items()}
+    d = {k: uniform2(v, arg_tpl['n'], rs) for k, v in arg_tpl.items()}
+    print(list(d['g']))
+    return d
 
 
-def Collect(Hf, arg_tpl, arg_opt, rs=np.random, ns=11, nit=10):
+def Collect(Hf, _optimize, arg_tpl, arg_opt, rs=np.random, ns=11, nit=10):
     n = arg_tpl['n']
     S = np.linspace(0, n, ns)[:-1]
     R = np.empty([ns, nit, 2**n, 2**n], dtype='complex128')
@@ -51,10 +54,16 @@ def Collect(Hf, arg_tpl, arg_opt, rs=np.random, ns=11, nit=10):
         print("Entropy S", s)
         for j in range(nit):
             print("itering", j)
+            print(arg_tpl, s)
             H4 = Hf(**generate_args(arg_tpl, rs))['H']
             rho = rand_rotate(Rho.rho_prod_even(n, s), rs=np.random)
+            #print(rho, H4)
+            np.save('rho.npy', rho)
+            np.save('H.npy', H4)
             H[i, j] = H4
-            R[i, j] = minimize_var(H4, rho, **arg_opt)
+            R[i, j] = _optimize(H4, rho, **arg_opt)
+            if s>3:
+                return
     result = {'Hamilton': Hf.__name__, 'S': S,
               'nit': nit, 'rho': R, 'H': H, **arg_tpl}
     np.save(fname(Hf, arg_tpl), result)
@@ -114,12 +123,12 @@ def plot_rho(Hf, arg_tpl, zipper=False):
     # print(good)
 
 
-def loadData(Hf, arg_tpl, arg_opt=None, arg_clt=None):
+def loadData(Hf, arg_tpl, arg_opt=None, arg_clt=None, _optimize=None):
     try:
         print(fname(Hf, arg_tpl))
         return np.load(fname(Hf, arg_tpl)).item()
     except FileNotFoundError:
-        return Collect(Hf, arg_tpl, arg_opt, **arg_clt)
+        return Collect(Hf, _optimize, arg_tpl, arg_opt, **arg_clt)
 
 # def draw_variance(*args, **arg_tpl):
     #res = loadData(*args, **arg_tpl)
@@ -154,9 +163,9 @@ def draw_rho_e(*args, **arg_tpl):
             print(la.norm(np.diag(rho).real) / la.norm(rho), s1)
 
 
-def draw_diff_rho(Hf, arg_tpl, arg_opt, arg_clt):
+def draw_diff_rho(Hf, _optimize, arg_tpl, arg_opt, arg_clt):
     n = arg_tpl['n']
-    res = loadData(Hf, arg_tpl, arg_opt, arg_clt)
+    res = loadData(Hf, arg_tpl, arg_opt, arg_clt, _optimize)
     H, R, nit, S = res['H'], res['rho'], res['nit'], res['S']
     dif = np.empty([len(S), nit, 2 * n - 1])
     for i, s in enumerate(S):
@@ -195,13 +204,17 @@ def diff_rho():
 
 if __name__ == "__main__":
     rs = RandomState(164147)
-    l = [0.01, 16, 0.2, 8, 0.5, 4, 1, 2]
+    l = [3, 0.01, 16, 0.2, 8, 0.5, 4, 1, 2]
     ls = []
     for w in l:
         ls.append(draw_diff_rho(Hamilton_XZ,
+                                #opt.minimize_var,
+                                minimize_local,
                                 {"n": 6, "delta": 0.54, "g": (0, w)},
-                                {'nit': 2000},
-                                {'rs': rs, 'ns': 10, 'nit': 6})
+                                #{'nit': 2000},
+                                {'depth':4, 'L':6},
+                                {'rs': rs, 'ns': 10, 'nit': 6}
+                                )
                   )
         #plot_rho(Hamilton_XZ, {"n":6, "delta":0.54, "g":(0, w)})
     #ls = np.array(ls)

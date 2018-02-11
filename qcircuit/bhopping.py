@@ -32,7 +32,8 @@ class BMPS(MPS):
         super().__init__(M, dim, trun=trun)
         self.canon()
         self._init_H(**para)
-        self._init_wavepacket(**pack)
+        self.wavepacket(**pack)
+        self.time = 0
 
     def zero(self):
         ground = np.zeros(self.dim)
@@ -134,7 +135,7 @@ class BMPS(MPS):
     def evolve_measure(self, time, n=5, k=10, tail=True):
         #p = self.copy()
         l=[[self.measure(i, self.H0) for i in range(self.LL)]]
-        print(l)
+        #print(l)
         for i in range(n):
             self.evolve(time, k, tail)
             self.canon()
@@ -146,38 +147,59 @@ class BMPS(MPS):
             print("> Progress {:3d}/{:}".format(i, n), end='\r')
         return np.array(l)
 
-    def omega(self, k):
-        return self.omega0 + 2*g*np.cos(k)
+    def naive_evolve(self, time, n):
+        '''Naive evolution based on exact solution'''
+        l=[]
+        for i in range(n+1):
+            self.wavepacket(*self.pack, t=time*i, trun=False)
+            le = [self.measure(i, self.H0) for i in range(self.LL)]
+            l.append(le)
+            #print("> Progress {:3d}/{:}".format(i, n), end='\r')
+        return np.array(l)
 
-    def _wavepacket(self, dk, center, k_c):
+    def lapse(self, t):
+        self.time += t
+
+    def alpha(self, alpha):
+        self.wavepacket(*self.pack, alpha=alpha, t=self.time, trun=False)
+
+    def omega(self, k):
+        return self.omega0 + 2*self.g*np.cos(k)
+
+    def wavepacket_mode(self, t=0):
+        dk, center, k_c = self.pack
         dx = np.arange(self.LL)-center
         k = 2*np.pi*np.arange(self.LL)/self.LL
         f_k = np.exp(-(dist(k-k_c)/dk)**2/2)
-        N_k = np.exp(1j * dx[:, np.newaxis] * k[np.newaxis, :])
+        kx = dx[:, np.newaxis] * k[np.newaxis, :]
+        wt = t*self.omega(k)[np.newaxis, :]
+        N_k = np.exp(1j * (kx-wt))
         #print((dx[:, np.newaxis] * k[np.newaxis, :]).transpose())
         #print(N_k.transpose())
         return N_k @ f_k
 
-    def _init_wavepacket(self, dk, center, k_c=np.pi/2, n=1, trun=True):
-        c_n = self._wavepacket(dk, center, k_c)
+    def wavepacket(self, dk, center, k_c=np.pi/2, alpha=1, t=0, trun=True):
+        self.pack = (dk, center, k_c)
+        c_n = self.wavepacket_mode(t)
+        #print(c_n)
         if trun:
             lb, rb = center-self.LL//2, center+self.LL//2
-            print(lb, rb)
+            #print(lb, rb)
             if lb >= 0:
                 c_n[:lb+1] = 0
             if rb <= self.LL-1:
                 c_n[rb:] = 0
-        c_n /= la.norm(c_n)/n
+        c_n = c_n/la.norm(c_n)*alpha
         for i in range(self.LL):
             coh = la.expm(c_n[i]*self.a_p)@self.zero()
-            coh /= la.norm(coh)
+            coh /= la.norm(coh)#Normalize wavefunction
             self.M[i][0, :, 0] = coh
 
 if __name__ == '__main__':
-    H = {"omega0":1, "g":0.1, "u":10, "h":0.1}
-    wavepack = {"dk":0.3, "center":10, "k_c":-np.pi/2, "trun":False}
-    s = BMPS(6, 61, H, wavepack)
-    l = s.evolve_measure(13, 15, tail=False)
+    H = {"omega0":1, "g":1, "u":10, "h":1}
+    wavepack = {"dk":0.3, "center":10, "k_c":-np.pi/2, "trun":True}
+    psi = BMPS(6, 101, H, wavepack)
+    l = psi.evolve_measure(1, 40)
     save("untruncated2.npy", l)
     #l = s.evolve(10, 20, False)
     ##l = s.test(1)
@@ -185,3 +207,7 @@ if __name__ == '__main__':
     #print(s.M[0])
     l = imresize(l, [600, 600], 'nearest')
     imsave('test.png', l)
+    #for theta in linspace(0, 2*pi, 11):
+        #phi.alpha_t(exp(1j*theta), tot_time)
+        #print("Angle {:12.4e}\tπQ {:12.5e}".format(theta, abs(psi.dot(phi))**2))
+

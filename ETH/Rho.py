@@ -54,7 +54,7 @@ def product_rho(L, s=None):
         return np.diag(rho_entropy(rho, s))
 
 
-def rho_prod_even(n, s=0):
+def rho_prod_even(n, s=0, rs=None):
     s1 = s / n
     err = 1e-10
     if s1 < err:
@@ -64,7 +64,10 @@ def rho_prod_even(n, s=0):
     else:
         x = opt.bisect(lambda x: s1 + x * np.log2(x) + (1 - x)
                        * np.log2(1 - x) if x > 0 else s1, err, .5 - err)
-    return product_rho([[x, 1 - x]] * n)
+    if rs:
+        rho = reduce(np.kron, [rand_rotate(diag([x, 1-x]), rs) for i in range(n)])
+    else:
+        return product_rho([[x, 1 - x]] * n)
 
 
 def compare(rho1, rho2):

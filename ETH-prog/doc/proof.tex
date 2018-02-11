@@ -47,7 +47,7 @@ Thus we have
 \begin{equation}
 	H_{ij}=\tr \Big[[M_i,\rho]\big[M_j, (H-E)^2\big]\Big]-2[M_i, \rho, H][M_j, \rho, H]
 \end{equation}
-\section{Stationary points (\texorpdfstring{$[\rho, (H-E)^2]=0$}{[rho, (H-E)^2]=0})}
+\section{Stationary points (\texorpdfstring{$[\rho, (H-E)^2]=0$}{[rho, (H-E)**2]=0})}
 If $V(x)$ reaches a stationary point, where $\pp V/\pp x|_{x=0}\equiv 0$ for any $M$, we can prove $[\rho, (H-E)^2]=0$. Variance can no longer be optimized by steepest descend. We want to prove that those stationary points $[\rho, (H-E)^2]=0$ with $[\rho, H]\neq 0$ are not a minimum point, i.e.\ it is a saddle point or maximum point. 
 
 Generally, any $M$ satisfying $[M, (H-E)^2]=0$ make $V'$ and first term in $V''$ vanish. As $[\rho, H]\neq 0$, we can choose $M_0=\ii[\rho, H]$ as the generator of unitary transformation. It is obvious that $[M_0, (H-E)^2]=0$ as both $\rho$ and $H$ commutes with $(H-E)^2$. For $M_0$
@@ -94,10 +94,14 @@ Similarly
 (\rho_i-\rho_j)(\Delta_i^2-\Delta_j^2)< 0,\quad \forall i,j\label{cond2},
 \end{equation}
 is equivalent to $V''>0$. It is sufficient for a minimum.
-\paragraph{Conclusion under $[\rho, H]=0$.} Condition (\ref{cond}) is sufficient and necessary condition that $V''\geq 0$, i.e.\ Hessian is positive semidefinite. Similar condition (\ref{cond2}) is sufficient and necessary condition that $V''> 0$, i.e.\ Hessian is positive definite. This means that larger eigenvalues of $\rho$ should reside in eigenstate with energy close to mean energy, otherwise we can optimize the variance by applying $M_{ij}$ which swaps two eigenvalues of $\rho$. This is intuitive and also numerically confirmed.
+\section{Conclusion under \texorpdfstring{$[\rho, H]=0$}{[rho, H]=0}}
+
+Condition (\ref{cond}) is sufficient and necessary condition that $V''\geq 0$, i.e.\ Hessian is positive semidefinite. Similar condition (\ref{cond2}) is sufficient and necessary condition that $V''> 0$, i.e.\ Hessian is positive definite. This means that larger eigenvalues of $\rho$ should reside in eigenstate with energy close to mean energy, otherwise we can optimize the variance by applying $M_{ij}$ which swaps two eigenvalues of $\rho$. This is intuitive and also numerically confirmed.
+
+Furthermore, there are possibly multiple local minimums, as \ref{cond2} does not guarantee uniqueness at all. As an simple example, for \[H_0=\diag[0,1,3],\quad\rho=\diag[1/6,1/3,1/2],\]there are two local minimum: $\rho_1=\diag[1/6,1/2,1/3]$ and $\rho_2=\diag[1/6,1/3,1/2]$
 \begin{figure}[htb]
 \centering
-\includegraphics[height=5cm]{figures/optimized.png}
+\includegraphics[height=5cm]{optimized.png}
 \caption{$\rho$ in energy eigenbases}
 \end{figure} 
 \section{Optimization Process}
