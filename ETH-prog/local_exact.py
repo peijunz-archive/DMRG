@@ -56,22 +56,6 @@ class Layers:
             # return op2.reshape(*op.shape, 4, 4)
             return op2
 
-    def contractV(self, H, i):
-        '''
-        Aim function
-        =hole_{ijkl}U_{ji}U_{lk}^*
-        =hole_{ijkl}U_{ji}U_{kl}^+
-        =hole_{ijkl}U_{ji}U_{kl}^+
-        =V_{ijkl}U_{ij}U_{kl}^+
-        ==> V_{ijkl}=hole_{jikl}
-        hole_{ijkl} = hole_{kilj}^*
-        ==> V_{ijkl} = V_{klji}*
-        V_{lkji}=V_{ijkl}*, f=V_{ijkl}U_{ij}U_{kl}^+
-        '''
-        hole = self.contract_until(H, i)
-        V = hole.transpose([1, 0, 2, 3])
-        return V
-
     def contract_op(self, inds, op, hc=False):
         '''
         Args:
@@ -91,33 +75,45 @@ class Layers:
         N = 2**self.L
         return rho.reshape(N, N)
 
-    def contract_hole(self, rho, H, ind):
+    def contract_hole(self, rho, H, ind, middle=True):
+        '''
+        Aim function
+        =hole_{ijkl}U_{ji}U_{lk}^*
+        =hole_{ijkl}U_{ji}U_{kl}^+
+        =hole_{ijkl}U_{ji}U_{kl}^+
+        =V_{ijkl}U_{ij}U_{kl}^+
+        ==> V_{ijkl}=hole_{jikl}
+        hole_{ijkl} = hole_{kilj}^*
+        ==> V_{ijkl} = V_{klji}*
+        V_{lkji}=V_{ijkl}*, f=V_{ijkl}U_{ij}U_{kl}^+
+        '''
         sh = [2**ind[1], 4, 2**(self.L - ind[1] - 2)]*2
         '''Convention: we are optimizing rho side U, so U at ind is contracted with H'''
-        H = self.contract_op((ind,), H, hc=True)
-        return np.einsum('ijklmn, lonipk->ompj', H.reshape(sh), rho.reshape(sh))
+        if middle:
+            H = self.contract_op((ind,), H, hc=True)
+        return np.einsum('ijklmn, lonipk->mopj', H.reshape(sh), rho.reshape(sh))
 
+    #@profile
     def contract_until(self, H, i):
         '''Contract lower part of U to rho, upper part to H'''
         rho = self.contract_op(self.indexes[:i], self.rho)
         H = self.contract_op(self.indexes[i+1:], H, hc=True)
         return self.contract_hole(rho, H, self.indexes[i])
 
+    #@profile
     def minimizeVarE_steps(self, H2):
-        for i, sp in enumerate(self.indexes):
-            yield sp, self.contractV(H2, i)
-
-    def minimizeVarE_steps_fast(self, H2):
         rho = self.rho
-        H2 = self.contract_H(self.indexes, H2)
-        ind = self.indexes[0]
-        yield ind, self.contract_hole(rho, H2, ind)
+        H2 = self.contract_op(self.indexes[1:], H2, hc=True)
+        r = self.indexes[0]
+        yield r, self.contract_hole(rho, H2, r)
 
-        for ind in self.indexes[1:]:
-            rho = self.contract_rho((ind,))
-            H = self.contract_H((ind,), H, reverse=True)
-            yield ind, self.contractV(H2, i)
+        for l, r in zip(self.indexes[:-1], self.indexes[1:]):
+            rho = self.contract_op((l,), rho)
+            V=self.contract_hole(rho, H2, r, middle=False)
+            H2 = self.contract_op((r,), H2)
+            yield r, V
 
+    #@profile
     def minimizeVarE_cycle(self, E=0):
         H2 = self.H2-(2*E)*self.H+E**2*np.eye(*self.H.shape)
         for sp, V in self.minimizeVarE_steps(H2):
@@ -126,10 +122,31 @@ class Layers:
 
     def minimizeVar_steps(self):
         for i, sp in enumerate(self.indexes):
-            yield sp, self.contractV(self.H, i), self.contractV(self.H2, i)
+            yield sp, self.contract_until(self.H, i), self.contract_until(self.H2, i)
+
+    def minimizeVar_steps_fast(self):
+        '''Contract all to rho as initial!'''
+        rho = self.rho
+        H = self.contract_op(self.indexes[1:], self.H, hc=True)
+        H2 = self.contract_op(self.indexes[1:], self.H2, hc=True)
+        r = self.indexes[0]
+        yield r, self.contract_hole(rho, H, r), self.contract_hole(rho, H2, r)
+
+        for l, r in zip(self.indexes[:-1], self.indexes[1:]):
+            rho = self.contract_op((l,), rho)
+            V = self.contract_hole(rho, H, r, middle=False)
+            V2 = self.contract_hole(rho, H2, r, middle=False)
+            H = self.contract_op((r,), H)
+            H2 = self.contract_op((r,), H2)
+            yield r, V, V2
 
     def minimizeVar_cycle(self):
         for sp, V, V2 in self.minimizeVar_steps():
+            self[sp], var = opt.minimize_var_local(V, V2, self[sp])
+        return var
+
+    def minimizeVar_cycle_fast(self):
+        for sp, V, V2 in self.minimizeVar_steps_fast():
             self[sp], var = opt.minimize_var_local(V, V2, self[sp])
         return var
 
@@ -152,7 +169,7 @@ if __name__ == "__main__":
     from analyse import generate_args
     from ETH import Rho
     from DMRG.Ising import Hamilton_XZ, Hamilton_XX
-    n = 4   # dof = 2**(2n) = 64
+    n = 9   # dof = 2**(2n) = 64
     d = 3   # At least 2**(2(n-2))
     arg_tpl = {"n": n, "delta": 0.54, "g": 0.1}
     H = Hamilton_XZ(n)['H']
@@ -163,8 +180,12 @@ if __name__ == "__main__":
     #print(la.eigh(rho))
     #minimize_local(H, rho, d, n)
     Y = Layers(rho, H, depth=d)
+    #Y.minimizeVarE_cycle_fast()
     for i in range(10):
         print(Y.minimizeVar_cycle())
+    #print("Second")
+    #for sp, V in Y.minimizeVarE_steps(Y.H2):
+        #print(sp, V.sum())
     #print("All Unitaries", Y.indexes)
     #mins = opt.exact_min_var(H, rho)
     #print(mins)
