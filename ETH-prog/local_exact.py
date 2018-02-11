@@ -75,7 +75,7 @@ class Layers:
         N = 2**self.L
         return rho.reshape(N, N)
 
-    def contract_hole(self, rho, H, ind, middle=True):
+    def contract_hole(self, rho, H, ind, middle=True, hc=True):
         '''
         Aim function
         =hole_{ijkl}U_{ji}U_{lk}^*
@@ -90,7 +90,7 @@ class Layers:
         sh = [2**ind[1], 4, 2**(self.L - ind[1] - 2)]*2
         '''Convention: we are optimizing rho side U, so U at ind is contracted with H'''
         if middle:
-            H = self.contract_op((ind,), H, hc=True)
+            H = self.contract_op((ind,), H, hc=hc)
         return np.einsum('ijklmn, lonipk->mopj', H.reshape(sh), rho.reshape(sh))
 
     #@profile
@@ -121,7 +121,7 @@ class Layers:
         return varE
 
     def minimizeVar_steps(self):
-        '''Contract all to rho as initial!'''
+        '''Contract all to H as initial, optimize U side'''
         rho = self.rho
         H = self.contract_op(self.indexes[1:], self.H, hc=True)
         H2 = self.contract_op(self.indexes[1:], self.H2, hc=True)
@@ -140,34 +140,35 @@ class Layers:
             yield mid, V, V2
 
     def minimizeVar_steps_back(self):
-        '''Contract all to rho as initial!
-        Need to contract to H
-        '''
+        '''Contract all to rho as initial, optimize H side'''
         rho = self.contract_op(self.indexes[:-1], self.rho)
         H = self.H
         H2 = self.H2
         mid = self.indexes[-1]
-        yield mid, self.contract_hole(rho, H, mid), self.contract_hole(rho, H2, mid)
+        yield mid, self.contract_hole(H, rho, mid, hc=False), self.contract_hole(H2, rho, mid, hc=False)
 
         for mid, r in zip(self.indexes[:-1][::-1], self.indexes[1:][::-1]):
             # March to new U
             H = self.contract_op((r,), H, hc=True)
             H2 = self.contract_op((r,), H2, hc=True)
+            # Contract
+            V = self.contract_hole(H, rho, mid, middle=False)
+            V2 = self.contract_hole(H2, rho, mid, middle=False)
             # Retreat
             rho = self.contract_op((mid,), rho, hc=True)
-            # Contract
-            V = self.contract_hole(rho, H, mid)
-            V2 = self.contract_hole(rho, H2, mid)
             yield mid, V, V2
 
     def minimizeVar_cycle(self, forward=True):
         if forward:
             steps = self.minimizeVar_steps()
+            for sp, V, V2 in steps:
+                self[sp], var = opt.minimize_var_local(V, V2, self[sp])
         else:
             steps = self.minimizeVar_steps_back()
-        for sp, V, V2 in steps:
-            self[sp], var = opt.minimize_var_local(V, V2, self[sp])
-            print("sub", var)
+            for sp, V, V2 in steps:
+                U, var = opt.minimize_var_local(V, V2, self[sp].T.conj())
+                print("sub", var)
+                self[sp] = U.T.conj()
         return var
 
     def minimizeVar(self, n=100, rel=1e-10):
