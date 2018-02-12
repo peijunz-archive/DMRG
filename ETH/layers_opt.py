@@ -1,7 +1,9 @@
+#!/usr/bin/env python3
+
 import numpy as np
 import scipy.linalg as la
-import ETH.optimization as opt
-from ETH.optimization_test import min_expect
+import .optimization as opt
+from .optimization_test import min_expect
 
 
 class Layers:
@@ -116,8 +118,9 @@ class Layers:
         return np.einsum('lonipk, ijklmn->mopj', op1.reshape(sh), op2.reshape(sh))
 
     #@profile
-    def contract_until(self, H, i):
-        '''DEPRECATED Contract lower part of U to rho, upper part to H'''
+    def contract_naive(self, H, i):
+        '''Contract lower part of U to rho, upper part to H
+        Only for testing purpose'''
         rho = self.contract_op(self.indexes[:i], self.rho)
         H = self.contract_op(self.indexes[i+1:], H, hc=True)
         return self.contract_hole(rho, H, self.indexes[i])
@@ -140,8 +143,8 @@ class Layers:
 
     def contract_cycle_back(self, *ops):
         '''Contract all to rho as initial, optimize H side'''
-        rho = self.contract_op(self.indexes, self.rho)
         ops = list(ops)
+        rho = self.contract_op(self.indexes, self.rho)
 
         for mid, r in zip(self.indexes[::-1], [None]+self.indexes[1:][::-1]):
             # March to new U
@@ -161,10 +164,15 @@ class Layers:
             return self.contract_cycle_for(*ops)
 
     #@profile
-    def minimizeVarE_cycle(self, E=0):
+    def minimizeVarE_cycle(self, E=0, forward=True):
         H2 = self.H2-(2*E)*self.H+E**2*np.eye(*self.H.shape)
-        for sp, V in self.contract_cycle(H2):
-            self[sp], varE = opt.minimize_quadratic_local(V, self[sp])
+        if forward:
+            for sp, V in self.contract_cycle(H2):
+                self[sp], varE = opt.minimize_quadratic_local(V, self[sp])
+        else:
+            for sp, V in self.contract_cycle(H2, back=True):
+                U, varE = opt.minimize_quadratic_local(V, self[sp].T.conj())
+                self[sp] = U.T.conj()
         return varE
 
     def minimizeVar_cycle(self, forward=True):
@@ -202,27 +210,12 @@ if __name__ == "__main__":
     from analyse import generate_args
     from ETH import Rho
     from DMRG.Ising import Hamilton_XZ, Hamilton_XX
-    n = 9   # dof = 2**(2n) = 64
+    n = 8   # dof = 2**(2n) = 64
     d = 3   # At least 2**(2(n-2))
     arg_tpl = {"n": n, "delta": 0.54, "g": 0.1}
     H = Hamilton_XZ(n)['H']
     #print(H)
-    rho = Rho.rho_prod_even(n, 3.33333333333333333)
-    #H, rho = np.load('H.npy'), 
-    #rho = np.load('rho.npy')
-    #print(la.eigh(rho))
-    #minimize_local(H, rho, d, n)
+    rho = Rho.rho_prod_even(n, 3)
     Y = Layers(rho, H, D=d)
-    #Y.minimizeVarE_cycle_fast()
-    #print("Second")
-    #for sp, V in Y.minimizeVarE_steps(Y.H2):
-        #print(sp, V.sum())
-    #print("All Unitaries", Y.indexes)
-    #mins = opt.exact_min_var(H, rho)
-    #print(mins)
-    #Y.minimizeVar()
-
-    #Em = min_expect(rho, H@H)
-    #print(0, Em, Y.contract_all(Y.H2))
     for i in range(10):
-        print(i, Y.minimizeVar_cycle(forward=False))
+        print(i, Y.minimizeVarE_cycle(forward=True))
