@@ -3,12 +3,13 @@ import scipy.linalg as la
 
 from numpy.random import RandomState
 from DMRG.Ising import Hamilton_XZ, Hamilton_XX, Hamilton_TL
+from DMRG.spin import sigma
 from ETH import Rho, Gibbs
 import ETH.optimization as opt
+import ETH.optimize_layers as ol
 from pylab import *
 from ETH.basic import *
 from scipy.misc import imresize
-from local_exact import minimize_local
 import os
 import cv2
 
@@ -29,25 +30,24 @@ def argv_str(v):
         return v
 
 
-def info(Hf, arg_tpl):
+def info(Hf, arg_tpl, align=False):
     l = ["{}={}".format(k, argv_str(v)) for k, v in arg_tpl.items()]
     l.insert(0, Hf.__name__)
     return '_'.join(l)
 
 
-def fname(Hf, arg_tpl, path="data", post='npy'):
-    return "{}/{}.{}".format(path, info(Hf, arg_tpl), post)
+def fname(Hf, arg_tpl, path="data", post='npy', pre="", align=False):
+    return "{}/{}{}.{}".format(path, info(Hf, arg_tpl, align), pre, post)
 
 
 def generate_args(arg_tpl, rs=np.random):
     d = {k: uniform2(v, arg_tpl['n'], rs) for k, v in arg_tpl.items()}
-    print(list(d['g']))
     return d
 
 
-def Collect(Hf, _optimize, arg_tpl, arg_opt, rs=np.random, ns=11, nit=10):
+def Collect(Hf, arg_tpl, _optimize, arg_opt, rs=np.random, ns=11, nit=10, pre=''):
     n = arg_tpl['n']
-    S = np.linspace(0, n, ns)[:-1]
+    S = mlinspace(ns)*n
     R = np.empty([ns, nit, 2**n, 2**n], dtype='complex128')
     H = np.empty_like(R)
     for i, s in enumerate(S):
@@ -56,20 +56,42 @@ def Collect(Hf, _optimize, arg_tpl, arg_opt, rs=np.random, ns=11, nit=10):
             print("itering", j)
             print(arg_tpl, s)
             H4 = Hf(**generate_args(arg_tpl, rs))['H']
-            rho = rand_rotate(Rho.rho_prod_even(n, s), rs=np.random)
+            rho = Rho.rho_prod_even(n, s, rs=np.random)
             #print(rho, H4)
-            np.save('rho.npy', rho)
-            np.save('H.npy', H4)
             H[i, j] = H4
             R[i, j] = _optimize(H4, rho, **arg_opt)
-            if s>3:
-                return
     result = {'Hamilton': Hf.__name__, 'S': S,
               'nit': nit, 'rho': R, 'H': H, **arg_tpl}
-    np.save(fname(Hf, arg_tpl), result)
-    print(fname(Hf, arg_tpl), 'Data saved!')
+    np.save(fname(Hf, arg_tpl, pre=pre), result)
+    print(fname(Hf, arg_tpl, pre=pre), 'Data saved!')
     return result
 
+
+
+def diff_gibbs(rho, H):
+    b = Gibbs.rho2beta(H, rho)
+    #print(b)
+    grho = Gibbs.beta2rho(H, b)
+    #l=Rho.compare(rho, grho)
+    m=Rho.compare_all(rho, grho)
+    return m
+
+def plot_diff(diffs, args_H, s, D, vmax=1):
+    w = len(diffs)
+    fig, ax = plt.subplots(1, w, figsize=(w*2+1, 3), sharey=True);
+    plt.subplots_adjust(top=0.8)
+    for i in range(w):
+        bar = ax[i].imshow(diffs[i], vmin=0, vmax=vmax, cmap="Reds");
+        ax[i].set_title('S/L={:5.3f}'.format(s[i]))
+    #plt.subplots_adjust(wspace=0.1)
+    fig.colorbar(bar, ax=ax.ravel().tolist(), orientation='horizontal', aspect=50);
+    fig.suptitle('Difference between density matrix of Local optimization and Gibbs ensemble. (L={n}, J={J}, h={h}, g(μ, Δ)={g}, depth={D})'.format(D=D, **args_H))
+    info = "L{n}_J{J}_h{h}_g{g}".format(**args_H)
+    #plt.savefig(info+".pdf")
+
+def plot_varx(mvx, arg_H, s, D):
+    bar = imshow(mvx, vmin=0, vmax=1, cmap="Reds");
+    colorbar(bar, orientation='horizontal', aspect=50);
 
 def testConvergence(Hf, arg_tpl, rs=None):
     H = Hf(n, delta, g, rs)
@@ -86,7 +108,7 @@ def testConvergence(Hf, arg_tpl, rs=None):
 
 
 def testDiagonal(Hf, arg_tpl):
-    res = np.load(fname(Hf, arg_tpl)).item()
+    res = np.load(fname(Hf, arg_tpl, pre=pre)).item()
     H, R, nit, S = res['H'], res['rho'], res['nit'], res['S']
     print(arg_tpl)
     for i, s in enumerate(S):
@@ -98,7 +120,7 @@ def testDiagonal(Hf, arg_tpl):
 
 
 def plot_rho(Hf, arg_tpl, zipper=False):
-    res = np.load(fname(Hf, arg_tpl)).item()
+    res = np.load(fname(Hf, arg_tpl, pre=pre)).item()
     H, R, nit, S = res['H'], res['rho'], res['nit'], res['S']
     path = 'data/' + info(Hf, arg_tpl)
     try:
@@ -123,12 +145,12 @@ def plot_rho(Hf, arg_tpl, zipper=False):
     # print(good)
 
 
-def loadData(Hf, arg_tpl, arg_opt=None, arg_clt=None, _optimize=None):
+def loadData(Hf, arg_tpl, _optimize=None, arg_opt=None, arg_clt=None, pre=''):
     try:
-        print(fname(Hf, arg_tpl))
-        return np.load(fname(Hf, arg_tpl)).item()
+        print(fname(Hf, arg_tpl, pre=pre))
+        return np.load(fname(Hf, arg_tpl, pre=pre)).item()
     except FileNotFoundError:
-        return Collect(Hf, _optimize, arg_tpl, arg_opt, **arg_clt)
+        return Collect(Hf, arg_tpl, _optimize, arg_opt, **arg_clt, pre=pre)
 
 # def draw_variance(*args, **arg_tpl):
     #res = loadData(*args, **arg_tpl)
@@ -149,8 +171,8 @@ def loadData(Hf, arg_tpl, arg_opt=None, arg_clt=None, _optimize=None):
     # savefig("figures/"+name+"-Variance.pdf")
 
 
-def draw_rho_e(*args, **arg_tpl):
-    res = loadData(*args, **arg_tpl)
+def draw_rho_e(*args, **argv):
+    res = loadData(*args, **argv)
     H, R, nit, S = res['H'], res['rho'], res['nit'], res['S']
     for i, s in enumerate(S):
         for j in range(nit):
@@ -163,9 +185,10 @@ def draw_rho_e(*args, **arg_tpl):
             print(la.norm(np.diag(rho).real) / la.norm(rho), s1)
 
 
-def draw_diff_rho(Hf, _optimize, arg_tpl, arg_opt, arg_clt):
+def draw_diff_rho(Hf, arg_tpl, _optimize, arg_opt, arg_clt):
     n = arg_tpl['n']
-    res = loadData(Hf, arg_tpl, arg_opt, arg_clt, _optimize)
+    res = loadData(Hf, arg_tpl, _optimize, arg_opt, arg_clt)
+    print(res)
     H, R, nit, S = res['H'], res['rho'], res['nit'], res['S']
     dif = np.empty([len(S), nit, 2 * n - 1])
     for i, s in enumerate(S):
@@ -195,36 +218,60 @@ def draw_diff_rho(Hf, _optimize, arg_tpl, arg_opt, arg_clt):
 
     return l
 
+def varx(rho, L):
+    l = []
+    for i in range(L):
+        r = rho.reshape((2**i, 2, 2**(L-i-1))*2)
+        x = np.einsum("ijkimk, jm", r, sigma[1])
+        l.append(x.real)
+    return 1-np.array(l)
 
-def diff_rho():
-    '''How to choose the entropy? Two parameters S and
-    random field factor g, see how large is the entanglement entropy'''
-    pass
-
+def draw_diff_matrix(Hf, arg_tpl, _optimize, arg_opt, arg_clt):
+    n = arg_tpl['n']
+    D = arg_opt['D']
+    res = loadData(Hf, arg_tpl, _optimize, arg_opt, arg_clt, pre="_D={}".format(D))
+    H, R, nit, S = res['H'], res['rho'], res['nit'], res['S']
+    dif = np.empty([len(S), nit, n, n])
+    vx = np.empty([len(S), nit, n])
+    for i, s in enumerate(S):
+        for j in range(nit):
+            b = Gibbs.rho2beta(H[i, j], R[i, j])
+            grho = Gibbs.beta2rho(H[i, j], b)
+            #print(b, grho)
+            dif[i, j] = diff_gibbs(R[i, j], H[i, j])
+            vx[i, j] = varx(R[i, j], n)
+            #v = la.eigvalsh(H[i, j])
+            #print("bE", b, b*(v[0]-v[-1]).real)
+    mdif = mean(dif, axis=1)
+    mvx = mean(vx, axis=1)
+    #sdif = std(dif, axis=1, ddof=1) / np.sqrt(nit)
+    #print(dif[0, 0])
+    plt.close("all")
+    clf()
+    plot_diff(mdif, arg_tpl, S/n, arg_opt['D'])
+    savefig(fname(Hf, arg_tpl, "figures", "rho-diff.pdf", pre="_D={:02d}".format(D), align=True))
+    plt.close("all")
+    clf()
+    plot_varx(mvx, arg_tpl, S/n, arg_opt['D'])
+    savefig(fname(Hf, arg_tpl, "figures", "var_x.pdf", pre="_D={:02d}".format(D), align=True))
 
 if __name__ == "__main__":
     rs = RandomState(164147)
-    l = [3, 0.01, 16, 0.2, 8, 0.5, 4, 1, 2]
-    ls = []
-    for w in l:
-        ls.append(draw_diff_rho(Hamilton_XZ,
-                                #opt.minimize_var,
-                                minimize_local,
-                                {"n": 6, "delta": 0.54, "g": (0, w)},
-                                #{'nit': 2000},
-                                {'depth':4, 'L':6},
-                                {'rs': rs, 'ns': 10, 'nit': 6}
-                                )
-                  )
-        #plot_rho(Hamilton_XZ, {"n":6, "delta":0.54, "g":(0, w)})
-    #ls = np.array(ls)
-    #save('a.npy', ls)
-    # print(ls.shape)
-    ##ls = load('a.npy')
-    # print(ls)
-    #cax = matshow(ls.transpose())
-    #cbar = colorbar(cax)
-    # xlabel('g')
-    # ylabel('S')
-    # savefig('test.pdf')
-    #testConvergence(4, Hamilton_XZ, {"n":6, "delta":0.54, "g":(0, 0.25)})
+    #l = [0.2, 0.5, 1, 2, 4, 8, 16]
+    l =  [0.2, 16, 0.5, 8, 1, 4, 2]
+    for D in [4, 6, 2, 5, 8, 10]:
+        draw_diff_matrix(
+            Hamilton_TL,
+            {"n":6, "J":1, "h":0.8090, "g":0.945},
+            ol.minimize_local,
+            {'D':D, 'L':6, 'n':300},
+            {'rs': rs, 'ns': 5, 'nit': 5},
+            )
+        for w in l:
+            draw_diff_matrix(
+                Hamilton_TL,
+                {"n": 6, "J": 1, "h":0.2, "g": (0, w)},
+                ol.minimize_local,
+                {'D':D, 'L':6, 'n':300},
+                {'rs': rs, 'ns': 5, 'nit': 5},
+                )

@@ -8,6 +8,7 @@ from itertools import permutations
 #@profile
 
 
+'''Global parts'''
 def gradient(H, rho, H2=None, err=0):
     '''The gradient for rho'=exp(ih)@rho@exp(ih)
 
@@ -110,16 +111,17 @@ def minimize_var(H, rho, E=None, meps=10, nit=100, err=0):
     else:
         return minimize_var_fix(H, rho, E, meps=meps, nit=nit, err=err)
 
+'''Local Code'''
+
 def improve(_grad, _f, meps):
     '''Single step of Steepest descent algorithm'''
     M, f1, f2 = _grad
     istep = 1 / meps
     orig = _f() #np.einsum('iijj', V).real
     step = - bitsign(f1) / np.clip(f2 / np.abs(f1), istep, None)
-    #print(f1, f2)
     for i in range(4):
         U = la.expm(1j * step * M)
-        new = _f(U)  #np.einsum("ijkl, ij, kl", V, U, U.T.conj()).real
+        new = _f(U)
         if new < orig:
             return U, new
         step /= 2
@@ -132,7 +134,7 @@ def f_quadratic_local(V, U=None):
         return np.einsum("ijkl, ij, kl", V, U, U.T.conj()).real
 
 def nabla_quadratic_local(V):
-    return 1j * (np.trace(V, axis1=0, axis2=1) - np.trace(V, axis1=2, axis2=3))
+    return (1j * (np.trace(V, axis1=2, axis2=3) - np.trace(V, axis1=0, axis2=1))).T
 
 def df1_quadratic_local(M, M2=None):
     if M2 is None:
@@ -145,7 +147,8 @@ def df2_quadratic_local(V, M):
     # but the two terms equal to each other
     f2_1 = np.einsum('ijkl, ij, kl', V, M, M).real
     f2_2 = np.einsum('ijkk, il, lj', V, M, M).real
-    return f2_1 - f2_2
+    #/2+ np.einsum('kkij, il, lj', V, M, M).real/2
+    return (f2_1 - f2_2)*2
 
 def df_quadratic_local(V):
     M = nabla_quadratic_local(V)
@@ -180,7 +183,7 @@ def df_var_local(V, V2):
 
     f2_1 = df2_quadratic_local(V, M)
     f2_2 = df2_quadratic_local(V2, M)
-    f2 = f2_2 - (2*E)*f2_1 - f1_1**2
+    f2 = f2_2 - (2*E)*f2_1 - 2*f1_1**2
     return M, f1, f2
 
 def minimize_var_local(V, V2, U=None, nit=10, meps=1):
@@ -201,8 +204,8 @@ def minimize_var_local(V, V2, U=None, nit=10, meps=1):
 def exact_min_var(H, rho):
     if max(H.shape)>8:
         return np.zeros(1)
-    #if H.shape[0]>
     l = la.eigvalsh(rho)[::-1]
+    assert all(l>=0)
     l/=sum(l)
     E = la.eigvalsh(H)
 
@@ -211,9 +214,25 @@ def exact_min_var(H, rho):
         EE = np.array(E2)
         var = np.dot(EE**2, l)-np.dot(EE, l)**2
         dE2 = (EE - np.dot(EE, l))**2
-        if all(dE2 == sorted(dE2)):
-            mins[var] = l[np.argsort(dE2[::-1])]
+        #if all(dE2 == sorted(dE2)):
+        mins[var] = l[np.argsort(dE2[::-1])]
     return mins
 
+
+'''Exact min solutions'''
+def exact_min_varE(H, rho, E=0):
+    l = la.eigvalsh(rho)[::-1]
+    assert all(l>=0)
+    l/=sum(l)
+    E = (la.eigvalsh(H)-E)**2
+    return np.dot(sorted(E), l)
+
 def closeto(mins, x):
-    return mins[np.argmin([x-i if i<=x else np.inf for i in mins.keys()])]
+    keys = list(mins.keys())
+    print(sorted(keys))
+    return keys[np.argmin([x-i if i<=x+1e-6 else np.inf for i in keys])]
+
+def min_expect(rho, H):
+    w1, v = la.eigh(rho)
+    w2, v = la.eigh(H)
+    return np.dot(sorted(w1), sorted(w2, reverse=True))
