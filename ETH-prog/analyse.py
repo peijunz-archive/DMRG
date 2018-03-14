@@ -45,7 +45,7 @@ def generate_args(arg_tpl, rs=np.random):
     return d
 
 
-def Collect(Hf, arg_tpl, _optimize, arg_opt, rs=np.random, ns=11, nit=10, pre=''):
+def Collect(Hf, arg_tpl, _optimize, arg_opt, rs=np.random, rs_rot=np.random, ns=11, nit=10, pre=''):
     n = arg_tpl['n']
     S = mlinspace(ns)*n
     R = np.empty([ns, nit, 2**n, 2**n], dtype='complex128')
@@ -57,7 +57,7 @@ def Collect(Hf, arg_tpl, _optimize, arg_opt, rs=np.random, ns=11, nit=10, pre=''
             print("Entropy S", s)
             print(arg_tpl, s)
             #H4 = Hf(**generate_args(arg_tpl, rs))['H']
-            rho = Rho.rho_prod_even(n, s, rs=np.random)
+            rho = Rho.rho_prod_even(n, s, rs=rs_rot)
             #print(rho, H4)
             H[i, j] = H4
             R[i, j] = _optimize(H4, rho, **arg_opt)
@@ -260,11 +260,12 @@ def draw_diff_matrix(Hf, arg_tpl, _optimize, arg_opt, arg_clt):
     savefig(fname(Hf, arg_tpl, "figures", "var_x.pdf", pre="_D={:02d}".format(D), align=True))
 
 if __name__ == "__main__":
-    rs = RandomState(164147)
+    rs = RandomState(16807)
+    rs = RandomState(31415926)
     #l = [0.2, 0.5, 1, 2, 4, 8, 16]
-    l =  [0.2, 16]#, 0.5, 8, 1, 4, 2]
+    l =  [3.14, 0.2, 16]#, 0.5, 8, 1, 4, 2]
     for D in [2, 4, 6, 5, 8, 10]:
-        #draw_diff_matrix(
+        # draw_diff_matrix(
             #Hamilton_TL,
             #{"n":6, "J":1, "h":0.8090, "g":0.945},
             #ol.minimize_local,
@@ -272,10 +273,10 @@ if __name__ == "__main__":
             #{'rs': rs, 'ns': 5, 'nit': 10},
             #)
         for w in l:
-            (
+            draw_diff_matrix(
                 Hamilton_TL,
-                {"n": 6, "J": 1, "h":0.2, "g": (0, w)},
+                {"n":6, "J": 1, "h":0.2, "g": (0, w)},
                 ol.minimize_local,
                 {'D':D, 'L':6, 'n':300, 'n':2000, 'rel':1e-8},
-                {'rs': rs, 'ns': 5, 'nit': 5},
+                {'rs': rs, 'rs_rot': rs, 'ns': 5, 'nit': 5},
                 )
