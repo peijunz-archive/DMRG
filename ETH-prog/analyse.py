@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import numpy as np
 import scipy.linalg as la
 
@@ -11,7 +12,7 @@ from pylab import *
 from ETH.basic import *
 from scipy.misc import imresize
 import os
-import cv2
+#import cv2
 
 
 def uniform2(v, n, rs=np.random):
@@ -25,7 +26,7 @@ def uniform2(v, n, rs=np.random):
 
 def argv_str(v):
     if isinstance(v, tuple):
-        return "{}±{}".format(*v)
+        return "{}+-{}".format(*v)
     else:
         return v
 
@@ -139,8 +140,10 @@ def plot_rho(Hf, arg_tpl, zipper=False):
                    imresize(img, 800, 'nearest'))
             img = (np.clip(np.log(np.clip(img / img.max(), 1e-25, None)
                                   ) + 10, 0, None) * 25).astype('uint8')
-            cv2.imwrite('{}/S={:04.2f}-{:02d}-log.png'.format(path,
-                                                              s, j), imresize(img, 800, 'nearest'))
+            print("cv2 not available")
+            raise NotImplementedError
+            #cv2.imwrite('{}/S={:04.2f}-{:02d}-log.png'.format(path,
+            #                                                  s, j), imresize(img, 800, 'nearest'))
     if zipper:
         os.system("zip {0}.zip {0}/*.png 1>/dev/null".format(path))
     # print(good)
@@ -248,11 +251,11 @@ def draw_diff_matrix(Hf, arg_tpl, _optimize, arg_opt, arg_clt):
     #sdif = std(dif, axis=1, ddof=1) / np.sqrt(nit)
     #print(dif[0, 0])
     plt.close("all")
-    clf()
+    plt.clf()
     plot_diff(mdif, arg_tpl, S/n, arg_opt['D'])
     savefig(fname(Hf, arg_tpl, "figures", "rho-diff.pdf", pre="_D={:02d}".format(D), align=True))
     plt.close("all")
-    clf()
+    plt.clf()
     plot_varx(mvx, arg_tpl, S/n, arg_opt['D'])
     xlabel("site")
     ylabel("s")
@@ -272,10 +275,11 @@ if __name__ == "__main__":
             #{'rs': rs, 'ns': 5, 'nit': 10},
             #)
         for w in l:
-            (
+            loadData(
                 Hamilton_TL,
                 {"n": 6, "J": 1, "h":0.2, "g": (0, w)},
                 ol.minimize_local,
                 {'D':D, 'L':6, 'n':300, 'n':2000, 'rel':1e-8},
                 {'rs': rs, 'ns': 5, 'nit': 5},
+                pre="_D={}".format(D)
                 )
