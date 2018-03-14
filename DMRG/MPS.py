@@ -218,10 +218,11 @@ class MPS:
         for i in range(start, end):
             b=self.B(i)
             if i in D:
+                #print(D[i])
                 E = np.einsum('kl, kio, ij, ljr->or', E, b.conj(), D[i], b)
             else:
                 E = np.einsum('kl, kio, lir->or', E, b.conj(), b)
-        return np.trace(E)
+        return np.trace(E).real
 
     def measure(self, start, op, Hermitian=True):
         n = round(math.log(op.size, self.dim)/2)

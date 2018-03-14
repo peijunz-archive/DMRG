@@ -220,6 +220,12 @@ def exact_min_var(H, rho):
 
 
 '''Exact min solutions'''
+
+def min_expect(rho, H2):
+    w1 = la.eigvalsh(rho)
+    w2 = la.eigvalsh(H2)
+    return np.dot(sorted(w1), sorted(w2, reverse=True))
+
 def exact_min_varE(H, rho, E=0):
     l = la.eigvalsh(rho)[::-1]
     assert all(l>=0)
@@ -231,8 +237,3 @@ def closeto(mins, x):
     keys = list(mins.keys())
     print(sorted(keys))
     return keys[np.argmin([x-i if i<=x+1e-6 else np.inf for i in keys])]
-
-def min_expect(rho, H):
-    w1, v = la.eigh(rho)
-    w2, v = la.eigh(H)
-    return np.dot(sorted(w1), sorted(w2, reverse=True))

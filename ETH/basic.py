@@ -47,15 +47,19 @@ def bitsign(x):
     return 1 - 2 * np.signbit(x)
 
 
+def mlinspace(n):
+    return (np.arange(n)+0.5)/n
+
+
 def rand_rotate(rho, amp=None, rs=np.random):
     U = rand_unitary(rho, amp, rs)
     return U@rho@U.T.conj()
 
 
-def test_mini(f, H, rho, x=0.01, n=100):
-    bench = f(H, rho)
+def verify_mini(fun, rho, x=0.01, n=100):
+    bench = fun(rho)
     for i in range(n):
-        test = f(H, rand_rotate(rho, x))
+        test = fun(rand_rotate(rho, x))
         if test < bench:
             return False
     return True

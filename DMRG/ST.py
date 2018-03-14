@@ -13,9 +13,9 @@ def streamline(tasks):
 
 def do_tasks(tasks, funs):
     tasks = streamline(tasks)
-    todo = {t:funs[t[0]](t[1]) for t in set(tasks)}
+    ready = {t:funs[t[0]](t[1]) for t in set(tasks)}
     for task in tasks:
-        todo[task]()
+        ready[task]()
 
 
 def ST1_tasks(L, n):

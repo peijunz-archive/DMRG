@@ -27,7 +27,7 @@ def meta_test_df(df, f, eps):
     f2_num = (f1_r-f1_l)/eps
     print(f1_l, f1_r, f1, f2, f2_num)
     assert abs(f1_mean - f1)<eps
-    assert abs(f2_num - f2)<np.sqrt(eps)*max(abs(f2), 1)
+    assert abs(f2_num - f2)<10*np.sqrt(eps)*max(abs(f2), 1)
 
 def test_df_quadratic():
     df = opt.df_quadratic_local(V2)

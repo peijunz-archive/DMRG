@@ -4,7 +4,7 @@ import ETH.optimization as opt
 
 
 class Layers:
-    def __init__(self, rho, H, D=4, L=None, dim=2):
+    def __init__(self, rho, H=None, D=4, L=None, dim=2, H2=None):
         '''
         Data structure:
             Internally, local unitaries are stored in merged layers. Every layer contains
@@ -31,15 +31,21 @@ class Layers:
             + indexes   enumeration of all local unitaries
         '''
         self.D = D
+        self.rho = rho
+        if H is not None:
+            self.H = H
+        else:
+            self.H = H2
+        if H2 is not None:
+            self.H2 = H2
+        elif H is not None:
+            self.H2=H@H
         if L is None:
-            self.L = np.int(np.log2(H.size)/np.log2(dim**2))
+            self.L = np.int(np.log2(self.H2.size)/np.log2(dim**2))
         else:
             self.L = L
         self.d = (self.D + 1) // 2
         self.l = self.L - 1
-        self.rho = rho
-        self.H = H
-        self.H2 = H@H
         self.U = np.empty([self.d, self.l, 4, 4], dtype='complex')
         self.U[:] = np.eye(4)[np.newaxis, np.newaxis]
         self.indexes = list(self._visit_all())
@@ -198,27 +204,30 @@ class Layers:
             last=cur
         return cur
 
-def minimize_local(H, rho, depth=4, L=None, dim=2, n=100, rel=1e-6):
-    Y = Layers(rho, H, depth=depth, L=L, dim=dim)
+def minimize_local(H, rho, D=4, L=None, dim=2, n=100, rel=1e-6):
+    Y = Layers(rho, H, D=D, L=L, dim=dim)
     last = np.inf
+    vals = []
     for i in range(n):
-        cur = self.minimizeVar_cycle()
-        print(i, cur)
-        if last-cur < rel*cur:
+        l = Y.minimizeVar_cycle()
+        #print(i, l)
+        if last-l[-1] < rel*l[-1]:
             break
-        last=cur
-    return Y.contract_rho_full()
+        last=l[-1]
+        vals.append(last)
+    print("Exit at {}".format(i))
+    return Y.contract_rho()#, vals
 
 
 if __name__ == "__main__":
     from ETH import Rho
     from DMRG.Ising import Hamilton_XZ, Hamilton_XX
-    n = 2   # dof = 2**(2n) = 64
-    d = 1   # At least 2**(2(n-2))
+    n = 5   # dof = 2**(2n) = 64
+    d = 2   # At least 2**(2(n-2))
     arg_tpl = {"n": n, "delta": 0.54, "g": 0.1}
     H = Hamilton_XZ(n)['H']
     #print(H)
-    rho = Rho.rho_prod_even(n, n/2, amp=0.1, rs=np.random)
+    rho = Rho.rho_prod_even(n, n/2, amp=0, rs=np.random)
     Y = Layers(rho, H, D=d)
     for i in range(10):
         print(i, Y.minimizeVarE_cycle(forward=True))
