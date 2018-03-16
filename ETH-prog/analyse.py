@@ -90,6 +90,9 @@ def plot_diff(diffs, args_H, s, D, vmax=1):
     info = "L{n}_J{J}_h{h}_g{g}".format(**args_H)
     #plt.savefig(info+".pdf")
 
+def plot_diff_rho(diffs, vars, args_H, s, D):
+    
+
 def plot_varx(mvx, arg_H, s, D):
     bar = imshow(mvx, vmin=0, vmax=1, cmap="Reds");
     colorbar(bar, orientation='horizontal', aspect=50);
@@ -244,9 +247,14 @@ def draw_diff_matrix(Hf, arg_tpl, _optimize, arg_opt, arg_clt):
             #v = la.eigvalsh(H[i, j])
             #print("bE", b, b*(v[0]-v[-1]).real)
     mdif = mean(dif, axis=1)
+    mvar = var(dif, axis=1, ddof=1)
     mvx = mean(vx, axis=1)
     #sdif = std(dif, axis=1, ddof=1) / np.sqrt(nit)
     #print(dif[0, 0])
+    plt.close("all")
+    clf()
+    plot_diff_diag(mdif, mvar, arg_tpl, S/n, arg_opt['D'])
+    savefig(fname(Hf, arg_tpl, "figures", "rho-diff-diag.pdf", pre="_D={:02d}".format(D), align=True))
     plt.close("all")
     clf()
     plot_diff(mdif, arg_tpl, S/n, arg_opt['D'])
@@ -263,7 +271,7 @@ if __name__ == "__main__":
     rs = RandomState(16807)
     rs = RandomState(31415926)
     #l = [0.2, 0.5, 1, 2, 4, 8, 16]
-    l =  [3.14, 0.2, 16]#, 0.5, 8, 1, 4, 2]
+    l =  [0.2, 16]#, 0.5, 8, 1, 4, 2]
     for D in [2, 4, 6, 5, 8, 10]:
         # draw_diff_matrix(
             #Hamilton_TL,
@@ -277,6 +285,6 @@ if __name__ == "__main__":
                 Hamilton_TL,
                 {"n":6, "J": 1, "h":0.2, "g": (0, w)},
                 ol.minimize_local,
-                {'D':D, 'L':6, 'n':300, 'n':2000, 'rel':1e-8},
+                {'D':D, 'L':6, 'n':2000, 'rel':1e-8},
                 {'rs': rs, 'rs_rot': rs, 'ns': 5, 'nit': 5},
                 )

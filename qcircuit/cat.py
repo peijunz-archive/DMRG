@@ -48,22 +48,24 @@ def wigner(alpha, psi):
     P = (-1)**np.arange(N)
     phi = D.T.conj()@psi
     w = np.sum(D@P@D.conj().T)
-    assert 2*abs(alpha)**2<N, "Too small N: {}<={}".format(N, 2*abs(alpha)**2)
+    #if 2*abs(alpha)**2<N:
+        #print("Too small N: {}<={}".format(N, 2*abs(alpha)**2))
     nn = np.abs(phi)**2
     return np.dot(nn, P)
 
 def husimi(alpha, psi):
     return abs(np.vdot(coherent(alpha, len(psi)), psi))**2
 
-def draw_q_function(f, xr=(-4,4), yr=(-4,4), dx=0.2, dy=0.2, trun=False, ip="bilinear", cmap="RdBu_r", fname=None, tt=None, vmin=None, vmax=None):
-    x = np.arange(*xr, dx)
-    y = np.arange(*yr, dy)
+def draw_q_function(f, xr=(-4,4), yr=(-4,4), dx=0.2, dy=0.2, trun=False, ip="bilinear", cmap="RdBu_r", fname=None, tt=None, vmin=None, vmax=None, grid=True):
+    x = np.arange(xr[0], xr[1]+dx/2, dx)
+    y = np.arange(yr[0], yr[1]+dy/2, dy)
     xx, yy = np.meshgrid(x, y, sparse=True)
     _f = np.vectorize(f)
     z = _f(xx+1j*yy)
     if trun:
         z=clip(z, 0, None)
-    cax = plt.imshow(z, interpolation=ip, aspect='equal', extent=(*xr, *yr), cmap=cmap, vmin=vmin, vmax=vmax, norm=CenterNorm())
+    ext = (xr[0]-dx/2, xr[1]+dx/2, yr[0]-dy/2, yr[1]+dy/2)
+    cax = plt.imshow(z, interpolation=ip, aspect='equal', extent=ext, cmap=cmap, vmin=vmin, vmax=vmax, norm=CenterNorm())
     #cax = contourf(x,y,z)
     if np.diff(xr)>np.diff(yr):
         plt.colorbar(cax, orientation='horizontal')
@@ -71,6 +73,10 @@ def draw_q_function(f, xr=(-4,4), yr=(-4,4), dx=0.2, dy=0.2, trun=False, ip="bil
         plt.colorbar(cax)
     if tt:
         plt.title(tt)
+    if grid:
+        plt.grid(linestyle=':', linewidth=1)
+    plt.xticks(np.arange(int(xr[0]), int(xr[1])+0.1, 1.0))
+    plt.yticks(np.arange(int(yr[0]), int(yr[1])+0.1, 1.0))
     if fname:
         plt.savefig(fname+'.pdf')
 def evolve_graph(H, wavepack, n=12, kd=1):
@@ -109,19 +115,19 @@ def evolve_graph(H, wavepack, n=12, kd=1):
     imsave('{}.png'.format(pre), l)
         #title('Linear evolution projected to linear dispersion case');
 
-def testHusimiWigner(alpha=2, k=1):
-    #cat = coherent(alpha, 80)+k*coherent(-alpha, 80)
-    #cat /= la.norm(cat)
+def testHusimiWigner(alpha=2, k=1, dim=80):
+    cat = coherent(alpha, dim)+k*coherent(-alpha, dim)
+    cat /= la.norm(cat)
     #f = partial(husimi, psi=cat)
     #draw_q_function(f, fname='husimi', tt="Q func for |2❭+|-2❭", dx=0.1, dy=0.1)
     #plt.clf()
-    #f = partial(wigner, psi=cat)
-    #draw_q_function(f, fname='wigner', tt="Wigner func for |2❭+|-2❭", dx=0.1, dy=0.1)
+    f = partial(wigner, psi=cat)
+    draw_q_function(f, fname='wigner', tt="Wigner func for |2❭+{}|-2❭".format(k), dx=0.1, dy=0.1)
 
     #plt.clf()
-    cat = coherent(alpha, 30)
-    f = partial(wigner, psi=cat)
-    draw_q_function(f, fname='wigner-single', tt="Wigner func for |2❭", dx=0.1, dy=0.1)
+    #cat = coherent(alpha, 30)
+    #f = partial(wigner, psi=cat)
+    #draw_q_function(f, fname='wigner-single', tt="Wigner func for |2❭", dx=0.1, dy=0.1)
 
 def run_q():
     wavepack = {"dk":0.3, "center":10, "k_c":-np.pi/2, "trun":True, 'alpha':2}
@@ -137,16 +143,24 @@ def testwigner(H, wavepack, n=12, kd=1):
     T2 = T*1.1
     dim = int(2*(np.abs(wavepack['alpha'])**2+1)*kd)
     L = 2*wavepack['center']+int(2*T2*H['g'])+1
-    L = 10
-    dim = 10
+    L = 2
+    dim = 40
     psi = bh.BMPS(dim, L, H, wavepack)
+    phi = bh.BMPS(dim, L, H, wavepack)
+    def Q(z):
+        phi.alpha(z, linear=False)
+        return abs(psi.dot(phi))**2
+    psi.evolve(T*1/2, int(T*80), enable_tail=True)
+    #phi.lapse(T/2*0.95)
     #for i in range(psi.L):
         #print(i, la.norm(psi.M[i]))
     #print(psi.wigner(-2, True))
     draw_q_function(psi.wigner, dx=0.2, dy=0.2, fname="test", tt="test")#, vmin=0, vmax=1)
+    plt.clf()
+    draw_q_function(Q, dx=0.2, dy=0.2, fname="test2", tt="test")#, vmin=0, vmax=1)
 
 if __name__ == "__main__":
-    #testHusimiWigner(2)
+    testHusimiWigner(2, -1j, 60)
     #run_q()
-    testwigner(H={"omega0":0, "g":1, "u":10, "h":1}, 
-               wavepack={"dk":0.3, "center":0, "k_c":-np.pi/2, "trun":False, 'alpha':2})
+    #testwigner(H={"omega0":0, "g":1, "u":10, "h":1}, 
+               #wavepack={"dk":0.3, "center":0, "k_c":-np.pi/2, "trun":False, 'alpha':2})
