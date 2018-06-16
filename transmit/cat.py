@@ -37,10 +37,10 @@ def expa_old(alpha, n=20):
 
 def exp_an(alpha, n=20):
     '''exponential of annihilation operator'''
-    return exp_ap(alpha.conj(), n).T.conj()
+    return exp_ap(np.conj(alpha), n).T.conj()
 
 def exp_ap(alpha, n=20):
-    '''exponential of production operator'''
+    '''exponential of creation operator'''
     a = np.sqrt(np.arange(1, n))
     A = np.eye(n, dtype='complex')
     invD = alpha/(np.arange(1, n)[::-1])
@@ -63,8 +63,7 @@ def displace(alpha, n=20):
 
 def wigner_matrix(alpha, n=20):
     '''D(a)PD(-a)'''
-    D = displace(alpha, n)
-    return D@(P(n)[:, np.newaxis]*D.T.conj())
+    return P(n)[:, np.newaxis]*displace(-2*alpha, n)
 
 @memory.cache
 def wigner_grid(x, y, n):
