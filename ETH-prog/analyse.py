@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import numpy as np
 import scipy.linalg as la
 
@@ -11,13 +12,19 @@ from pylab import *
 from ETH.basic import *
 from scipy.misc import imresize
 import os
-import cv2
+import argparse
+#import cv2
+
+def unified_optimizer(H, rho, D=0, n=100, rel=1e-6):
+    if D > 0:
+        return ol.minimize_local(H, rho, D=D, dim=2, n=n, rel=rel)
+    else:
+        return opt.minimize_var_nfix(H, rho, meps=10, nit=n, err=rel)
 
 
 def uniform2(v, n, rs=np.random):
     if isinstance(v, tuple):
         l = v[0] + v[1] * rs.uniform(-1, 1, n)
-        print(l)
         return l
     else:
         return v
@@ -25,7 +32,7 @@ def uniform2(v, n, rs=np.random):
 
 def argv_str(v):
     if isinstance(v, tuple):
-        return "{}±{}".format(*v)
+        return "{}+-{}".format(*v)
     else:
         return v
 
@@ -47,7 +54,8 @@ def generate_args(arg_tpl, rs=np.random):
 
 def Collect(Hf, arg_tpl, _optimize, arg_opt, rs=np.random, rs_rot=np.random, ns=11, nit=10, pre=''):
     n = arg_tpl['n']
-    S = mlinspace(ns)*n
+    ns, s = mlinspace(ns)
+    S = n*s
     R = np.empty([ns, nit, 2**n, 2**n], dtype='complex128')
     H = np.empty_like(R)
     for j in range(nit):
@@ -82,7 +90,7 @@ def plot_diff(diffs, args_H, s, D, vmax=1):
     fig, ax = plt.subplots(1, w, figsize=(w*2+1, 3), sharey=True);
     plt.subplots_adjust(top=0.8)
     for i in range(w):
-        bar = ax[i].imshow(diffs[i], vmin=0, vmax=vmax, cmap="Reds");
+        bar = ax[i].imshow(diffs[i], vmin=0, vmax=vmax);
         ax[i].set_title('S/L={:5.3f}'.format(s[i]))
     #plt.subplots_adjust(wspace=0.1)
     fig.colorbar(bar, ax=ax.ravel().tolist(), orientation='horizontal', aspect=50);
@@ -91,10 +99,10 @@ def plot_diff(diffs, args_H, s, D, vmax=1):
     #plt.savefig(info+".pdf")
 
 def plot_diff_rho(diffs, vars, args_H, s, D):
-    
+    pass
 
 def plot_varx(mvx, arg_H, s, D):
-    bar = imshow(mvx, vmin=0, vmax=1, cmap="Reds");
+    bar = imshow(mvx, vmin=0, vmax=1);
     colorbar(bar, orientation='horizontal', aspect=50);
 
 def testConvergence(Hf, arg_tpl, rs=None):
@@ -142,8 +150,10 @@ def plot_rho(Hf, arg_tpl, zipper=False):
                    imresize(img, 800, 'nearest'))
             img = (np.clip(np.log(np.clip(img / img.max(), 1e-25, None)
                                   ) + 10, 0, None) * 25).astype('uint8')
-            cv2.imwrite('{}/S={:04.2f}-{:02d}-log.png'.format(path,
-                                                              s, j), imresize(img, 800, 'nearest'))
+            print("cv2 not available")
+            raise NotImplementedError
+            #cv2.imwrite('{}/S={:04.2f}-{:02d}-log.png'.format(path,
+            #                                                  s, j), imresize(img, 800, 'nearest'))
     if zipper:
         os.system("zip {0}.zip {0}/*.png 1>/dev/null".format(path))
     # print(good)
@@ -197,8 +207,9 @@ def draw_diff_rho(Hf, arg_tpl, _optimize, arg_opt, arg_clt):
     dif = np.empty([len(S), nit, 2 * n - 1])
     for i, s in enumerate(S):
         for j in range(nit):
-            b = Gibbs.rho2beta(H[i, j], R[i, j])
-            grho = Gibbs.beta2rho(H[i, j], b)
+            #b = Gibbs.rho2beta(H[i, j], R[i, j])
+            #grho = Gibbs.beta2rho(H[i, j], b)
+            grho = np.eye(*R[i, j].shape)
             #print(b, grho)
             dif[i, j] = Rho.compare(R[i, j], grho)
             v = la.eigvalsh(H[i, j])
@@ -222,13 +233,30 @@ def draw_diff_rho(Hf, arg_tpl, _optimize, arg_opt, arg_clt):
 
     return l
 
-def varx(rho, L):
+def polarization(rho, L, k=1):
     l = []
     for i in range(L):
         r = rho.reshape((2**i, 2, 2**(L-i-1))*2)
-        x = np.einsum("ijkimk, jm", r, sigma[1])
+        x = np.einsum("ijkimk, jm", r, sigma[k])
         l.append(x.real)
-    return 1-np.array(l)
+    return np.array(l)
+
+def plot_scatter_array(x, y):
+    L = len(y)
+    for i in range(L):
+        plot(x[i]*ones_like(y[i]), y[i], 'ko')
+
+def mean_diag(Hf, arg_tpl, _optimize, arg_opt, arg_clt):
+    n = arg_tpl['n']
+    D = arg_opt['D']
+    res = loadData(Hf, arg_tpl, _optimize, arg_opt, arg_clt, pre="_D={}".format(D))
+    H, R, nit, S = res['H'], res['rho'], res['nit'], res['S']
+    dif = np.empty([nit])
+    i = 0
+    for j in range(nit):
+        grho = Gibbs.beta2rho(H[i, j], 0)
+        dif[j] = np.mean(np.diag(Rho.compare_all(R[i, j], grho)))
+    return dif
 
 def draw_diff_matrix(Hf, arg_tpl, _optimize, arg_opt, arg_clt):
     n = arg_tpl['n']
@@ -236,43 +264,128 @@ def draw_diff_matrix(Hf, arg_tpl, _optimize, arg_opt, arg_clt):
     res = loadData(Hf, arg_tpl, _optimize, arg_opt, arg_clt, pre="_D={}".format(D))
     H, R, nit, S = res['H'], res['rho'], res['nit'], res['S']
     dif = np.empty([len(S), nit, n, n])
-    vx = np.empty([len(S), nit, n])
+    px = np.empty([len(S), nit, n])
+    pz = np.empty([len(S), nit, n])
+    E = np.empty([len(S), nit])
+    varE = np.empty([len(S), nit])
     for i, s in enumerate(S):
+        print('='*50)
+        print(">>> Entropy S={}".format(s))
         for j in range(nit):
+            E[i, j] = trace2(H[i,j], R[i, j]).real
             b = Gibbs.rho2beta(H[i, j], R[i, j])
-            grho = Gibbs.beta2rho(H[i, j], b)
+            grho = Gibbs.beta2rho(H[i, j], 0)
+            varE[i, j] = trace2(H[i,j]@H[i,j], R[i, j]).real-E[i, j]**2
             #print(b, grho)
-            dif[i, j] = diff_gibbs(R[i, j], H[i, j])
-            vx[i, j] = varx(R[i, j], n)
+            dif[i, j] = Rho.compare_all(R[i, j], grho)
+            #dif[i, j] = diff_gibbs(R[i, j], H[i, j])
+            px[i, j] = polarization(R[i, j], n, 1)**2
+            pz[i, j] = polarization(R[i, j], n, 3)**2
+            print('-'*50)
+            print("Energy", E[i, j])
+            print("Variance", varE[i, j])
+            #px = polarization(R[i, j], n, 1)
+            #py = polarization(R[i, j], n, 2)
+            #pz = polarization(R[i, j], n, 3)
+            #print((px**2+py**2+pz**2)/2)
+            print(np.diag(dif[i, j]))
+            #print(b, px[i, j])
             #v = la.eigvalsh(H[i, j])
             #print("bE", b, b*(v[0]-v[-1]).real)
     mdif = mean(dif, axis=1)
-    mvar = var(dif, axis=1, ddof=1)
-    mvx = mean(vx, axis=1)
+    #mvar = var(dif, axis=1, ddof=1)
+    mpx = mean(px, axis=1)
+    mpz = mean(pz, axis=1)
+    mE = mean(E, axis=1)
+    mvarE = mean(varE, axis=1)
     #sdif = std(dif, axis=1, ddof=1) / np.sqrt(nit)
     #print(dif[0, 0])
-    plt.close("all")
+    #plt.close("all")
+    #clf()
+    #plot_diff_diag(mdif, mvar, arg_tpl, S/n, arg_opt['D'])
+    #savefig(fname(Hf, arg_tpl, "figures", "rho-diff-diag.pdf", pre="_D={:02d}".format(D), align=True))
+    ##plt.close("all")
     clf()
-    plot_diff_diag(mdif, mvar, arg_tpl, S/n, arg_opt['D'])
-    savefig(fname(Hf, arg_tpl, "figures", "rho-diff-diag.pdf", pre="_D={:02d}".format(D), align=True))
-    plt.close("all")
-    clf()
-    plot_diff(mdif, arg_tpl, S/n, arg_opt['D'])
+    plot_diff(diff(mdif[0]), arg_tpl, S/n, arg_opt['D'])
     savefig(fname(Hf, arg_tpl, "figures", "rho-diff.pdf", pre="_D={:02d}".format(D), align=True))
     plt.close("all")
     clf()
-    plot_varx(mvx, arg_tpl, S/n, arg_opt['D'])
-    xlabel("site")
-    ylabel("s")
-    title(r'Variance of $\sigma_x$ after optimization (L={n}, J={J}, h={h}, g(μ, Δ)={g}, depth={D})'.format(D=D, **arg_tpl))
-    savefig(fname(Hf, arg_tpl, "figures", "var_x.pdf", pre="_D={:02d}".format(D), align=True))
+    #plot_diff(np.max(dif, axis=1), arg_tpl, S/n, arg_opt['D'])
+    #savefig(fname(Hf, arg_tpl, "figures", "rho-diff-max.pdf", pre="_D={:02d}".format(D), align=True))
+    #plt.close("all")
+    #clf()
+    #for i in [0, 1]:
+        #plot_diff(dif[:, i], arg_tpl, S/n, arg_opt['D'])
+        #savefig(fname(Hf, arg_tpl, "figures", "rho-diff-sample{}.pdf".format(i), pre="_D={:02d}".format(D), align=True))
+        #plt.close("all")
+        #clf()
+    #plot_varx(mpx, arg_tpl, S/n, arg_opt['D'])
+    #xlabel("site")
+    #ylabel("s")
+    #title(r'Polarization of $\sigma_x$ after optimization ($L={n}, J={J}, h={h}, g(\mu,\delta)={g}$, depth={D})'.format(D=D, **arg_tpl))
+    #savefig(fname(Hf, arg_tpl, "figures", "var_x.pdf", pre="_D={:02d}".format(D), align=True))
 
-if __name__ == "__main__":
+    #clf()
+    #plot_varx(mpz, arg_tpl, S/n, arg_opt['D'])
+    #xlabel("site")
+    #ylabel("s")
+    #title(r'Polarization of $\sigma_z$ after optimization ($L={n}, J={J}, h={h}, g(\mu,\delta)={g}$, depth={D})'.format(D=D, **arg_tpl))
+    #savefig(fname(Hf, arg_tpl, "figures", "var_z.pdf", pre="_D={:02d}".format(D), align=True))
+
+    #clf()
+    #plot_varx(mE, arg_tpl, S/n, arg_opt['D'])
+    #xlabel("site")
+    #ylabel("s")
+    #title(r'Mean energy after optimization (L={n}, J={J}, h={h}, g(\mu,\delta)={g}, depth={D})'.format(D=D, **arg_tpl))
+    #savefig(fname(Hf, arg_tpl, "figures", "E.pdf", pre="_D={:02d}".format(D), align=True))
+
+
+    #clf()
+    #errorbar(S/n,
+        #mean(varE, axis=1),
+        #std(varE, axis=1),
+        #capsize=2,
+        #label=r"$\mathrm{tr}(\rho H^2)-\mathrm{tr}(\rho H)^2$")
+    #grid();
+    #legend();
+    #xlabel('s')
+    #ylabel('Var[E]');
+    #savefig(fname(Hf, arg_tpl, "figures", "E_var.pdf", pre="_D={:02d}".format(D), align=True))
+
+    #clf()
+    #errorbar(S/n,
+        #mean(E, axis=1),
+        #std(E, axis=1),
+        #capsize=2,
+        #label=r"$\mathrm{tr}(\rho H)$")
+    #plot_scatter_array(S/n, E)
+    #grid();
+    #legend();
+    #xlabel('s')
+    #ylabel('E');
+    #savefig(fname(Hf, arg_tpl, "figures", "E.pdf", pre="_D={:02d}".format(D), align=True))
+
+def interactive_run():
+    parser = argparse.ArgumentParser(description='Process a batch of jobs')
+    parser.add_argument('window', metavar='W', type=float, nargs='+',
+                        default=[0.2, 0.5, 1., 2., 4., 8., 16.],
+                    help='Window sizes of random field g')
+    parser.add_argument('--depth', dest="depth", type=int, nargs='+',
+                    default=[0],
+                    help='Window sizes of random field g')
+    parser.add_argument('--niter', dest='niter',type=int,
+                    default=2000,
+                    help='Max number to iterate')
+    parser.add_argument('--rel', dest='rel', type=float,
+                    default=1e-8,
+                    help='Max relative error to stop iteration')
+    args = parser.parse_args()
     rs = RandomState(16807)
-    rs = RandomState(31415926)
-    #l = [0.2, 0.5, 1, 2, 4, 8, 16]
-    l =  [0.2, 16]#, 0.5, 8, 1, 4, 2]
-    for D in [2, 4, 6, 5, 8, 10]:
+    rs_rot = RandomState(31415926)
+    l = [0.2, 0.5, 1, 2, 4, 8, 16]
+    nm = []
+    for w in args.window:
+        for D in args.depth:
         # draw_diff_matrix(
             #Hamilton_TL,
             #{"n":6, "J":1, "h":0.8090, "g":0.945},
@@ -280,11 +393,33 @@ if __name__ == "__main__":
             #{'D':D, 'L':6, 'n':2000, 'rel':1e-8},
             #{'rs': rs, 'ns': 5, 'nit': 10},
             #)
-        for w in l:
-            draw_diff_matrix(
+            m = mean_diag(
                 Hamilton_TL,
-                {"n":6, "J": 1, "h":0.2, "g": (0, w)},
-                ol.minimize_local,
-                {'D':D, 'L':6, 'n':2000, 'rel':1e-8},
-                {'rs': rs, 'rs_rot': rs, 'ns': 5, 'nit': 5},
+                {"n":6, "J": 1, "h":0.809, "g": (0.945, w)},
+                unified_optimizer,
+                {'D':D, 'n':args.niter, 'rel':args.rel},
+                {'rs': rs, 'rs_rot': rs_rot, 'ns': [0.1], 'nit': 15},
+                #pre="_D={}".format(D)
                 )
+            nm.append(np.mean(m))
+        print("window {}, D {}, mean |n_i|^2{}".format(w, args.depth, nm))
+
+def ETH_magic_parameter():
+    rs = RandomState(16807)
+    rs_rot = RandomState(31415926)
+    l = []
+    for D in [0,2,4,6,8]:
+        nm = draw_diff_matrix(
+            Hamilton_TL,
+            {"n":6, "J": 1, "h":0.809, "g": 0.945},
+            unified_optimizer,
+            {'D':D, 'n':1000, 'rel':1e-8},
+            {'rs': rs, 'rs_rot': rs_rot, 'ns': [0, 0.6/6, 1.2/6], 'nit': 15},
+            #pre="_D={}".format(D)
+            )
+        l.append(np.mean(nm))
+    print(l)
+
+if __name__ == "__main__":
+    interactive_run()
+    #ETH_magic_parameter()

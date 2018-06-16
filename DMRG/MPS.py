@@ -206,6 +206,7 @@ class MPS:
             E = np.einsum('kl, kno, lnr->or', E, self.B(i).conj(), rhs.B(i))
         return np.trace(E)
 
+    #@profile
     def corr(self, *ops):
         '''oplist should be a list of ordered operators applied sequentially like
         (4, sigma[3]), (6, sigma[2]), (7, sigma[1]), which means
@@ -213,21 +214,22 @@ class MPS:
         '''
         assert(self.canonical)
         D = dict(ops)
+        if len(D.keys()) == 0:
+            return 1
         start, end = min(D.keys()), max(D.keys())+1
         E = np.diag(self.Sl[start]**2)
         for i in range(start, end):
             b=self.B(i)
             if i in D:
-                #print(D[i])
-                E = np.einsum('kl, kio, ij, ljr->or', E, b.conj(), D[i], b)
+                E = np.einsum('kl, kio, ij, ljr->or', E, b.conj(), D[i], b, optimize=False)
             else:
-                E = np.einsum('kl, kio, lir->or', E, b.conj(), b)
+                E = np.einsum('kl, kio, lir->or', E, b.conj(), b, optimize=False)
         return np.trace(E).real
 
     def measure(self, start, op, Hermitian=True):
         n = round(math.log(op.size, self.dim)/2)
         s = self.block(start, n)
-        ret = np.einsum('abd, aed, be', s, s.conj(), op)
+        ret = np.einsum('abd, aed, be', s, s.conj(), op, optimize=False)
         return ret.real if Hermitian else ret
 
     #@profile

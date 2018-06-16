@@ -1,0 +1,19 @@
+#!/bin/bash -l
+
+#Time limit
+#$ -l h_rt=48:00:00
+
+#Project name
+#$ -P dmat-mbl
+
+#Send email-report at the end of the job
+#Email -m e
+
+#$ -cwd
+
+#Load modules:
+module load python/3.6.2
+
+#Run the program
+file="`date +%T`+_w${WINDOW}.log"
+python analyse.py ${WINDOW} --niter 2 --depth 2 > log/$file 2> log/$file.error

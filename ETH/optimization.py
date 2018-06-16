@@ -82,6 +82,7 @@ def minimize_rho(rho, f, df, meps=0.5, nit=100, err=0):
                 cur = nxt
                 rho = rho_try
                 break
+        #print(cur, nabla, hessian)
         if ((i * 10 > nit) and j == 9):  # or (f1 < err and convex):
             break
     print("Stop at {} with f={}, f1={}, convex={}".format(i, cur, f1, convex))
@@ -105,11 +106,11 @@ def minimize_var_nfix(H, rho, meps=10, nit=100, err=0):
     return minimize_rho(rho, f, df, meps, nit, err)
 
 
-def minimize_var(H, rho, E=None, meps=10, nit=100, err=0):
+def minimize_var(H, rho, E=None, meps=10, n=100, rel=0):
     if E is None:
-        return minimize_var_nfix(H, rho, meps=meps, nit=nit, err=err)
+        return minimize_var_nfix(H, rho, meps=meps, nit=n, err=rel)
     else:
-        return minimize_var_fix(H, rho, E, meps=meps, nit=nit, err=err)
+        return minimize_var_fix(H, rho, E, meps=meps, nit=n, err=rel)
 
 '''Local Code'''
 

@@ -1,15 +1,16 @@
 '''Suzuki Trotter Expansion'''
 
 def streamline(tasks):
+    '''Notice aliasing'''
     L = len(tasks)
-    j=0
-    for i in range(1, L):
-        if tasks[i][0] == tasks[j][0]:
-            tasks[j][1] += tasks[i][1]
+    i=-1
+    for j in range(L):
+        if tasks[i][0] == tasks[j][0] and j:
+            tasks[i][1] += tasks[j][1]
         else:
-            j+=1
-            tasks[j] = list(tasks[i])
-    return [tuple(i) for i in tasks[:j+1]]
+            i+=1
+            tasks[i] = tasks[j].copy()
+    return [tuple(t) for t in tasks[:i+1]]
 
 def do_tasks(tasks, funs):
     tasks = streamline(tasks)

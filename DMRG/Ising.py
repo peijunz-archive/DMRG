@@ -37,8 +37,7 @@ def nearest(n, *ops, coef=1, sparse=False):
 def Hamilton_trans(n, g=0, J=1):
     H_tpl = '$H=-\sum_i JZ_iZ_{i+1} - \sum_i gX_i$'
 
-    H = np.zeros([2**n, 2**n], dtype='complex128')
-    H -= nearest(n, sigma[3], sigma[3], coef=J)
+    H = -nearest(n, sigma[3], sigma[3], coef=J).astype('double')
     H -= nearest(n, sigma[1], coef=g)
 
     return {'H': H, 'H_template': H_tpl, 'n': n, 'J': J, 'g': g}
@@ -47,8 +46,7 @@ def Hamilton_trans(n, g=0, J=1):
 def Hamilton_XX(n, delta=1 / 2, g=1):
     H_tpl = '$H=-\sum (Z_iZ_{i+1}+\Delta X_iX_{i+1})-\sum g_iX_i$'
 
-    H = np.zeros([2**n, 2**n], dtype='complex128')
-    H -= nearest(n, sigma[1], coef=g)
+    H = -nearest(n, sigma[1], coef=g).astype('double')
     H -= nearest(n, sigma[3], sigma[3])
     H -= nearest(n, sigma[1], sigma[1], coef=delta)
 
@@ -58,8 +56,7 @@ def Hamilton_XX(n, delta=1 / 2, g=1):
 def Hamilton_XZ(n, delta=1 / 2, g=1, h=0.1):
     H_tpl = '$H=-\sum (X_iX_j+Y_iY_j+\Delta Z_iZ_j)+\sum (gX_i+hZ_i)$'
 
-    H = np.zeros([2**n, 2**n], dtype='complex128')
-    H -= nearest(n, sigma[1], sigma[1])
+    H = -nearest(n, sigma[1], sigma[1]).astype('complex128')
     H -= nearest(n, sigma[2], sigma[2])
     H -= nearest(n, sigma[3], sigma[3], coef=delta)
     H += nearest(n, sigma[1], coef=g)
@@ -72,8 +69,7 @@ def Hamilton_TL(n, J=1, g=0.945, h=0.8090):
     '''Transverse field Ising model with Longitudinal field'''
     H_tpl = r'$H=-\sum J Z_iZ_{i+1}+\sum (gX_i+hZ_i)$'
 
-    H = np.zeros([2**n, 2**n], dtype='complex128')
-    H += nearest(n, sigma[3], sigma[3], coef=J)
+    H = nearest(n, sigma[3], sigma[3], coef=J).astype('double')
     H += nearest(n, sigma[1], coef=g)
     H += nearest(n, sigma[3], coef=h)
 
@@ -88,3 +84,4 @@ if __name__ == '__main__':
     A = Hamilton_XX(4, delta=0.5, g=1)
     print(A['H_template'])
     print(*la.eigh(A['H']), sep='\n')
+    print(Hamilton_TL(4))

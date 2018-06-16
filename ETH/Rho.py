@@ -77,7 +77,7 @@ def compare_segm(r1, r2, start, end):
     sh = (2**start, 2**(end-start), 2**(n-end))*2
     t1 = np.einsum('ijkilk->jl', r1.reshape(sh))
     t2 = np.einsum('ijkilk->jl', r2.reshape(sh))
-    return la.norm(t1-t2)
+    return la.norm(t1-t2)**2
 
 def compare_all(r1, r2):
     n = int(np.round(np.log2(r1.shape[0])))

@@ -8,6 +8,9 @@ H = H_0 + H_i
 
 Time evolution U = exp(iHt)=exp(iH_0 t)*exp(iH_i t)
 
+The system is a bosonic chain, with a dangling element at the end to represent global coupling.
+During evolutin, it can be chosen to not involve the last term.
+
 We apply ST expansion to H_i terms, i.e. split remaining H into even sites H_e and odd sites H_o.
 We only need to construct one hopping term and using existing code.
 '''
@@ -17,21 +20,24 @@ import numpy as np
 import scipy.linalg as la
 from functools import reduce
 from scipy.misc import imresize
+from .cat import wigner_matrix, expect, coherent
+
+def printf(fmt, *arg, **argv):
+    print(fmt.format(*arg, **argv))
 
 @np.vectorize
 def dist_circ(t):
     return (t+np.pi)%(2*np.pi)-np.pi
 
 class BMPS(MPS):
-    def __init__(self, dim, L, para, pack, trun=10):
+    def __init__(self, dim, l, para, pack):
         self.dim = dim
-        M = [self.zero().reshape([1, dim, 1]) for i in range(L)]
+        M = [self.zero().reshape([1, dim, 1]) for i in range(l+1)]
         #M[0] = np.array(s0).reshape([1, dim, 1])
-        super().__init__(M, dim, trun=trun)
-        self.canon()
+        super().__init__(M, dim, trun=self.dim)
         self._init_H(**para)
         self.wavepacket(**pack)
-        self.time = 0
+        self.canon()
 
     def zero(self):
         ground = np.zeros(self.dim)
@@ -44,17 +50,20 @@ class BMPS(MPS):
             p[i] = 1
         return np.diag(p)
 
-    def _init_H(self, omega0, g, u, h):
+    def _init_H(self, omega0=0, g=1, u=2, h=1, K=0):
         self.omega0 = omega0
+        self.K = K
         self.g = g
         self.u = u
         self.h = h
         self.a = np.diag(np.sqrt(np.arange(1, self.dim)), k=1)
         self.a_p = self.a.T.conj()
         # Resonance Cavity
-        self.H0 = np.diag(np.arange(self.dim))
+        N = np.arange(self.dim)
+        self.N = np.diag(N)
+        #self.H0 = np.diag(self.omega0*N - K*N**2)
         # Tail
-        self.LL = self.L - 1
+        self.l = self.L - 1
         self.Ht = np.diag(np.arange(self.dim))
         # Tail coupling
         self.O = np.empty((self.dim,)*4)
@@ -85,7 +94,7 @@ class BMPS(MPS):
     def update_MPO(self, mpo):
         assert len(mpo) == self.L, "Incompatible MPO"
         for i in range(self.L):
-            multi = np.einsum("ijk, lmjo->ilokm", self.M[i], mpo[i])
+            multi = np.einsum("ijk, lmjo->ilokm", self.M[i], mpo[i], optimize=False)
             sh = multi.shape
             shape = (sh[0]*sh[1], sh[2], sh[3]*sh[4])
             #print(i, sh, shape)
@@ -99,29 +108,30 @@ class BMPS(MPS):
             U = la.expm(-1j * self.H1 * k * t).reshape([self.dim] * 4)
             #@profile
             def _even_update():
-                for i in range(0, self.LL - 1, 2):
+                for i in range(0, self.l - 1, 2):
                     self.update_double(U, i)
             return _even_update
         def odd_update(k):
             U = la.expm(-1j * self.H1 * k * t).reshape([self.dim] * 4)
             #@profile
             def _odd_update():
-                for i in range(1, self.LL - 1, 2):
+                for i in range(1, self.l - 1, 2):
                     self.update_double(U, i)
             return _odd_update
         def single(k):
-            U1 = la.expm(-1j * self.omega0 * self.H0 * k * t)
+            #print(self.omega0*self.N-self.K*self.N**2)
+            U1 = la.expm(-1j * (self.omega0*self.N-(self.K/2)*self.N**2) * k * t)
             #@profile
             def _single():
-                for i in range(self.LL):
+                for i in range(self.l):
                     self.update_single(U1, i)
             return _single
-        def last(k):
+        def tail(k):
             U2 = la.expm(-1j * self.u * self.Ht * k * t)
             def _single():
-                self.update_single(U2, self.LL)
+                self.update_single(U2, self.l)
             return _single
-        def tail(k):
+        def coupling(k):
             mpo = self.MPO(k * t)
             #@profile
             def _tail():
@@ -130,22 +140,25 @@ class BMPS(MPS):
         tasks = ()
         if self.g:
             tasks += (even_update, odd_update)
-        if self.omega0:
+        if self.omega0 or self.K:
             tasks += (single,)
         if self.u:
-            tasks += (last,)
-        if self.h and enable_tail:
             tasks += (tail,)
+        if self.h and enable_tail:
+            tasks += (coupling,)
         ST2(tasks, n)
+        self.time += t
+        self.c_n = self.wavepacket_mode(self.time, linear=False)
 
-    def evolve_measure(self, time, n=5, k=10):
+    def evolve_measure(self, time, n=1, k=10):
         #p = self.copy()
-        l=[[self.measure(i, self.H0) for i in range(self.LL)]]
+        l=[[self.measure(i, self.N) for i in range(self.l)]]
         #print("Initial", l[0])
         for i in range(n):
+            printf("{}/{}", i, n)
             self.evolve(time, k)
             self.canon()
-            le = [self.measure(i, self.H0) for i in range(self.LL)]
+            le = [self.measure(i, self.N) for i in range(self.l)]
             #if le[-1] >= l[-1][-1]:
             l.append(le)
             #else:
@@ -154,28 +167,15 @@ class BMPS(MPS):
             #print("> Progress {:3d}/{:}".format(i, n), end='\r')
         return np.array(l)
 
-    def naive_evolve(self, time, n):
+    def exact_evolve(self, time, n, linear=False):
         '''Naive evolution based on exact solution'''
         l=[]
         for i in range(n+1):
-            self.wavepacket(*self.pack, t=time*i, trun=False)
-            le = [self.measure(i, self.H0) for i in range(self.LL)]
+            self.wavepacket(*self.pack, t=time*i, trun=False, linear=linear)
+            le = [self.measure(i, self.N) for i in range(self.l)]
             l.append(le)
             #print("> Progress {:3d}/{:}".format(i, n), end='\r')
         return np.array(l)
-
-    def linear_evolve(self, time, n):
-        '''Naive evolution based on exact solution'''
-        l=[]
-        for i in range(n+1):
-            self.wavepacket(*self.pack, t=time*i, trun=False, _omega=self.linear_omega)
-            le = [self.measure(i, self.H0) for i in range(self.LL)]
-            l.append(le)
-            #print("> Progress {:3d}/{:}".format(i, n), end='\r')
-        return np.array(l)
-
-    def lapse(self, t):
-        self.time += t
 
     def alpha(self, alpha, linear=False):
         self.wavepacket(*self.pack, alpha=alpha, t=self.time, trun=False, linear=linear)
@@ -183,15 +183,12 @@ class BMPS(MPS):
     def husimi(self, alpha, linear=False):
         pass
 
-    def wigner(self, alpha, linear=False):
-        from cat import wigner
-        c_n = self.wavepacket_mode(self.time, linear)
-        alpha_list = alpha*c_n/la.norm(c_n)
-        D = [la.expm(alp*self.a_p-np.conj(alp)*self.a) for alp in alpha_list]
-        P = np.diag((-1)**np.arange(self.dim))
-        w = [d@P@d.T.conj() for d in D]
-        l = self.B(0).flatten()
-        return self.corr(*list(enumerate(w)))
+    def wigner(self, alpha, linear=False, threshold=0):
+        alpha_list = alpha*self.c_n/la.norm(self.c_n)
+        W = [(i, wigner_matrix(alp, self.dim)) for i, alp in enumerate(alpha_list)]
+        print(len(W))
+        #print(alpha_list)
+        return self.corr(*W)
 
     def omega(self, k, k0):
         return self.omega0 + 2*self.g*np.cos(k)
@@ -201,9 +198,10 @@ class BMPS(MPS):
 
     def wavepacket_mode(self, t=0, linear=False):
         dk, center, k_c = self.pack
-        dx = np.arange(self.LL)-center
-        k = 2*np.pi*np.arange(self.LL)/self.LL
+        dx = np.arange(self.l)-center
+        k = 2*np.pi*np.arange(self.l)/self.l
         f_k = np.exp(-(dist_circ(k-k_c)/dk)**2/2)
+        #print(f_k/la.norm(f_k))
         kx = dx[:, np.newaxis] * k[np.newaxis, :]
         if linear:
             _omega = self.linear_omega
@@ -217,38 +215,40 @@ class BMPS(MPS):
         #print(N_k.transpose())
         return N_k @ f_k
 
+    def init_wave(self):
+        for i in range(self.l):
+            self.M[i][0, :, 0] = coherent(self.c_n[i], self.dim)
+
     def wavepacket(self, dk, center, k_c=np.pi/2, alpha=1, t=0, trun=True, linear=False):
         self.pack = (dk, center, k_c)
-        c_n = self.wavepacket_mode(t, linear)
+        self.time = t
+        self.c_n = self.wavepacket_mode(t, linear)
         if trun:
-            lb, rb = center-self.LL//2, center+self.LL//2
+            lb, rb = center-self.l//2, center+self.l//2
             #print(lb, rb)
             if lb >= 0:
-                c_n[:lb+1] = 0
-            if rb <= self.LL-1:
-                c_n[rb:] = 0
-        c_n = c_n/la.norm(c_n)*alpha
-        for i in range(self.LL):
-            coh = la.expm(c_n[i]*self.a_p)@self.zero()
-            coh /= la.norm(coh)#Normalize wavefunction
-            self.M[i][0, :, 0] = coh
+                self.c_n[:lb+1] = 0
+            if rb <= self.l-1:
+                self.c_n[rb:] = 0
+        self.c_n = self.c_n/la.norm(self.c_n)*alpha
+        self.init_wave()
             #print(i, abs(coh))
-        #print("Good", [self.measure(i, self.H0) for i in range(self.LL)])
+        #print("Good", [self.measure(i, self.N) for i in range(self.l)])
             #print(i, coh)
 
 if __name__ == '__main__':
     from pylab import *
-    H = {"omega0":0, "g":1, "u":10, "h":3}
-    wavepack = {"dk":0.3, "center":10, "k_c":-np.pi/2, "trun":True, 'alpha':2}
-    psi = BMPS(10, 50, H, wavepack)
-    l = psi.evolve_measure(1, 10)
-    save("untruncated2.npy", l)
+    H = {"omega0":0, "g":0, "u":0, "h":0, 'K':1}
+    wavepack = {"dk":0.5, "center":5, "k_c":-np.pi/2, "trun":False, 'alpha':2}
+    psi = BMPS(10, 1, H, wavepack)
+    l = psi.evolve_measure(np.pi, k=10)
+    print(psi.M)
+    save("untruncated2.npy", l*4)
     #l = s.evolve(10, 20, False)
     ##l = s.test(1)
     #print(l/l[0,0])
     #print(s.M[0])
-    l = imresize(l, [600, 600], 'nearest')
-    imsave('test.png', l)
+    print(l)
     #for theta in linspace(0, 2*pi, 11):
         #phi.alpha_t(exp(1j*theta), tot_time)
         #print("Angle {:12.4e}\tπQ {:12.5e}".format(theta, abs(psi.dot(phi))**2))

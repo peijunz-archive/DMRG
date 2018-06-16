@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.linalg as la
 import ETH.optimization as opt
-
+from ETH.basic import trace2
 
 class Layers:
     def __init__(self, rho, H=None, D=4, L=None, dim=2, H2=None):
@@ -204,19 +204,19 @@ class Layers:
             last=cur
         return cur
 
-def minimize_local(H, rho, D=4, L=None, dim=2, n=100, rel=1e-6):
-    Y = Layers(rho, H, D=D, L=L, dim=dim)
-    last = np.inf
-    vals = []
+def minimize_local(H, rho, D=4, dim=2, n=100, rel=1e-6):
+    Y = Layers(rho, H, D=D, dim=dim)
+    last = trace2(rho, Y.H2).real - trace2(rho, H).real**2
+    vals = [last]
     for i in range(n):
         l = Y.minimizeVar_cycle()
-        #print(i, l)
+        print(i, l)
         if last-l[-1] < rel*l[-1]:
             break
         last=l[-1]
         vals.append(last)
     print("Exit at {}".format(i))
-    return Y.contract_rho()#, vals
+    return Y.contract_rho(), vals
 
 
 if __name__ == "__main__":

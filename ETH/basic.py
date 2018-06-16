@@ -37,7 +37,7 @@ def energy_var(H, rho, H2=None):
 def rand_unitary(rho, amp=None, rs=np.random):
     Hr, Hi = rs.randn(2, *rho.shape)
     H = Hr + 1j * Hi
-    U, _, _ = la.svd(Hr + 1j * Hi)
+    U, *_ = la.svd(Hr + 1j * Hi)
     if amp is not None:
         return la.expm(amp * la.logm(U))
     return U
@@ -48,7 +48,10 @@ def bitsign(x):
 
 
 def mlinspace(n):
-    return (np.arange(n)+0.5)/n
+    if isinstance(n, int):
+        return n, (np.arange(n)+0.5)/n
+    else:
+        return len(n), np.array(n)
 
 
 def rand_rotate(rho, amp=None, rs=np.random):
