@@ -1,5 +1,5 @@
 from ETH import Rho
-from ETH.optimize_layers import Layers
+from ETH.optimize_layers import LayersDense
 from DMRG.Ising import nearest, Hamilton_XZ, Hamilton_XX
 from DMRG.spin import sigma
 from ETH.basic import *
@@ -18,7 +18,7 @@ def test_small_chain_varE(n, k, nit=50):
     H = Hamilton_XZ(n)['H']
     rho = Rho.rho_prod_even(n, n*k, rs=np.random)
     mini = opt.exact_min_varE(H, rho)
-    Y = Layers(rho, H, D=4**(n-2)//(n-1)*2+1)
+    Y = LayersDense(rho, H, D=4**(n-2)//(n-1)*2+1)
     last = np.inf
     for i in range(nit):
         l = Y.minimizeVarE_cycle()
@@ -40,7 +40,7 @@ def test_local_H2(n, choice, k=0.5, d=2, tol=1e-4):
     else:
         H2 = nearest(n, np.diag([-1, 1]))
     rho = Rho.rho_prod_even(n, n*k, rs=np.random)
-    Y = Layers(rho, H2=H2, D=d)
+    Y = LayersDense(rho, H2=H2, D=d)
     mini = opt.min_expect(H2, rho)
     last = np.inf
     for i in range(50):
@@ -62,13 +62,13 @@ def test_reverse_engineering(n, k, nit=50, tol=1e-4):
     rho = v@np.diag(rho)@v.T.conj()
     mini = opt.min_expect(H2, rho)
     assert abs(trace2(rho, H2) - mini)<1e-6
-    Y = Layers(rho, H2=H2, D=3)
+    Y = LayersDense(rho, H2=H2, D=3)
     for ind in Y.indexes:
         Y[ind] = rand_unitary(np.eye(4), amp=0.1)
     rho2 = Y.contract_rho()
     assert trace2(rho2, H2) > mini
     #print(trace2(rho2, H2).real, mini)
-    Y = Layers(rho2, H2=H2, D=3)
+    Y = LayersDense(rho2, H2=H2, D=3)
     last = np.inf
     for i in range(1000):
         l = Y.minimizeVarE_cycle()
@@ -86,9 +86,9 @@ def test_for_back_symmetry():
     H = Hamilton_XZ(n)['H']
     rho = Rho.rho_prod_even(n, n*k)#, rs=np.random)
     rho2 = rand_rotate(rho)
-    Y = Layers(rho, rho, D=3)
+    Y = LayersDense(rho, rho, D=3)
     Y.H2 = rho2
-    Y2 = Layers(rho2, rho, D=3)
+    Y2 = LayersDense(rho2, rho, D=3)
     Y2.H2 = rho
     for i in range(2):
         l1 = Y.minimizeVarE_cycle()
