@@ -1,0 +1,33 @@
+\documentclass{article}
+\usepackage{zpj}
+\begin{document}
+\author{Peijun Zhu}
+\title{Range of $|\rho_1-\rho_2|^2$}
+\maketitle
+
+
+Suppose we have two density $n\times n$ matrix 
+$\rho_1=U_1\Lambda_1U_1^\dagger, \rho_2=U_2\Lambda_2U_2^\dagger$, where $\Lambda_i$ are diagonal matrix with eigenvalues $\lambda_{i, k}$. As $\Delta^2=|\rho_1-\rho_2|^2$ is invariant under unitary transformation, we can let $U_2=I_n$ and consider $U_1$ only. Then we have $\rho_2\rightarrow \Lambda_2$ and
+\begin{align}
+	\Delta^2&=|\rho_1-\Lambda_2|^2\\
+	&=\tr[(\rho_1-\Lambda_2)^2]\\
+	&=|\Lambda_1|^2+|\Lambda_2|^2-2\tr[U_1\Lambda_1U_1^\dagger\Lambda_2]\label{final}
+\end{align}
+As the first step, we fix $\Lambda_1, \Lambda_2$ and change $U_1$ to maximize $\Delta^2$. It is proved that
+\begin{equation}
+\nabla_M \tr[\ee^{\ii M}\rho_1\ee^{-\ii M}\rho_2]=\ii[\rho_1, \rho_2]
+\end{equation}
+For $\tr[U_1\Lambda_1U_1^\dagger\Lambda_2]$ to have extremum with respect to change $U_1\rightarrow \ee^{\ii M}U_1$, we need $[U_1\Lambda_1U_1^\dagger, \Lambda_2]=0$, i.e.\ $\rho_1$ is diagonalized in $\Lambda_2$ bases. As a result, the diagonal elements vector $\bm{\lambda_1}'$ of possible $\rho_1$ are simply permutations of $\bm \lambda_1=(\lambda_{1,i},\lambda_{1,i},\ldots\lambda_{1, n})$. Thus we can prove
+\begin{equation}
+\min [\bm\lambda_1'\cdot\bm\lambda_2]\leq\tr[U_1\Lambda_1U_1^\dagger\Lambda_2]\leq \max [\bm\lambda_1'\cdot\bm\lambda_2]
+\end{equation}
+For any choice of $\bm\lambda_1'$ it is obvious that elements of $\bm\lambda_1', \bm\lambda_2$ are all positive which proves that
+\[\tr[U_1\Lambda_1U_1^\dagger\Lambda_2]\geq\min[\bm\lambda_1'\cdot\bm\lambda_2]\geq0\]
+The exact min and max for given $\bm\lambda_1, \bm\lambda_2$ can be given by \href{https://en.wikipedia.org/wiki/Rearrangement_inequality}{Rearrangement inequality}. 
+
+As a final result, we have
+\begin{equation}
+	\Delta^2 = |\bm \lambda_1'|^2+|\bm \lambda_2|^2-2\tr[U_1\Lambda_1U_1^\dagger\Lambda_2]\leq|\bm \lambda_1'|^2+|\bm \lambda_2|^2\leq 2
+\end{equation}
+
+\end{document}

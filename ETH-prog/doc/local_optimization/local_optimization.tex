@@ -1,0 +1,63 @@
+\documentclass{article}
+\usepackage{zpj}
+\usepackage{amsthm}
+\usepackage{braket}
+\usepackage{hyperref}
+\title{Local optimization}
+\author{Peijun Zhu}
+\newtheorem{theorem}{Theorem}[section]
+
+\begin{document}
+\maketitle
+\section{Quadratic function $V$ for observable $h$}
+\begin{figure}[htb]
+	\centering
+	\includegraphics[width=\textwidth]{network-crop.pdf}
+	\caption{Optimize single block($A$) with $U_0\rightarrow U_0U^A$}
+\end{figure} 
+For local optimization, we are considering only local transformations in the green block({\color{ForestGreen}$U_0, U^A$}), and keep other environment blocks {\color{blue}$B$}. To minimize variance of energy, we change $U_0\rightarrow U_0U^A$. We first contract all unitary transformation except $U^A$ with $\rho$ or $h$, which gives $\tilde \rho=U_0^\dagger U_1^\dagger\rho U_1 U_0$ and $\tilde h=U_2h U_2^\dagger$. We rewrite $\tilde\rho\rightarrow\rho, \tilde h\rightarrow h,U^A\rightarrow U$.
+
+Indices relevant to $A$ are written in subscripts and irrelevant indices are superscripts. The expectation value of $h$ becomes
+\begin{align}
+f(U, h, \rho)&=\tr[U h U^{\dagger} \rho]\\
+ &=U_{ij} h_{jk}^{mn}U^{\dagger}_{kl} \rho_{li}^{mn}\\
+ &= V_{ijkl}U_{ij}U^{\dagger}_{kl}, \qquad V_{ijkl}=\sum_{mn}  h_{jk}^{mn}  \rho_{li}^{nm}
+\end{align}
+$V=V(h, \rho)$ is a linear function with respect to $\rho$ and $h$. Generally, $V$ can also be Schmidt decomposed into $V_{ijkl}=\sum_\alpha \bar h_{jk}^\alpha \bar \rho_{li}^\alpha$, where $\bar h_{jk}^\alpha, \bar \rho_{li}^\alpha$ are Schmidt bases. As both $\rho,  h$ are Hermitian, $V$ has symmetry
+\begin{equation}
+	V_{ijkl}=V_{lkji}^*\label{sym}
+\end{equation}
+
+
+\section{Basic Derivatives}
+
+For local optimization process, we are always working with $V_{ijkl}$. With $U=\exp(\ii xM)$, where $M$ is Hermitian, we have
+\[f(xM, h, \rho)=V_{ijkl}\exp(\ii xM)_{ij}\exp(-\ii xM)_{kl}\]
+Then we can expand $\exp(\pm\ii xM)\approx I_n\pm\ii Mx-M^2x^2/2$ to find
+\[f(xM, h, \rho) \approx V_{iijj} + \ii(V_{ijkk}-V_{kkij})M_{ij}x + (2V_{ijkl}M_{ij}M_{kl}-V_{iijk}M^2_{jk}-V_{ijkk}M^2_{ij})\frac{x^2}{2}
+\]
+From (\ref{sym}), we know \[V_{kkij}=V_{jikk}^*,\quad V_{iijk}M_{jk}^2=V_{kjii}^*M_{jk}^2=V_{kjii}^*M_{kj}^{2*} \]
+With $G(h,\rho)=\tr_B\ii[\rho, h]$ and $S(h,\rho)=\tr_B\{\rho, h\}$, we have
+\begin{align}
+	\tr[GM] &= \ii(V_{ijkk}-V_{kkij})M_{ij}\\ \tr[SM^2]&=V_{iijk}M^2_{jk}+V_{ijkk}M^2_{ij}
+\end{align}
+Thus
+\begin{equation}
+	f\approx f_0+\tr[GM]x+\Big(2V_{ijkl}M_{ij}M_{kl}-\tr[SM^2]\Big)\frac{x^2}{2}
+\end{equation}
+
+\begin{equation}
+\nabla_{M} f(M, h, \rho)= G(h, \rho)
+\end{equation}
+\section{Derivatives of variance}
+$\Var[H]=f(xM, H^2, \rho)-f^2(xM, H, \rho)$. Like what we did for global optimization, we have
+\begin{align}
+	\frac{\pp \Var[H]}{\pp x} &= f'(H^2)-2Ef'(H)\\
+	    &=f'\big[(H-E)^2\big]\\
+		&=\tr\Big[G\big((H-E)^2\big)M\Big]\\
+	\frac{\pp^2 \Var[H]}{\pp x^2}&=f''(H^2)-2Ef''(H)-2f'(H)^2\\
+	&=f''\big[(H-E)^2\big]-2\tr^2[G(H)M]
+\end{align}
+But this time $M$ is restricted in small subspace. Minimum require
+$\tr_B[\rho, (H-E)^2]=0$ for all $A$ block to optimize. Although $[\rho, H]=0$ is sufficient for $[\rho, (H-E)^2]=0$, it can not be generalized to partial traced case, i.e. $\tr_B[\rho, H]=0$ is not sufficient for $\tr_B[\rho, (H-E)^2]=0$.
+\end{document}
