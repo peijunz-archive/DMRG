@@ -2,9 +2,10 @@ import numpy as np
 import scipy.linalg as la
 import ETH.optimization as opt
 from ETH.basic import trace2
+from functools import reduce
 
 class LayersStruct:
-    def __init__(self, rho, H=None, D=4, L=None, dim=2, H2=None):
+    def __init__(self, W, D, offset=0):
         '''
         Data structure:
             Internally, local unitaries are stored in merged layers. Every layer contains
@@ -16,39 +17,26 @@ class LayersStruct:
             organized in even layer first order.
 
         Args:
-            + rho   density matrix
-            + H     Hamiltonian
             + D     depth of layers
-            + L     Length of the chain, if None, calculated from shape of rho and dim
-            + dim   dim of each site Hilbert space
+            + W     width of the circuit, if None, calculated from shape of rho and dim
 
         Other Properties:
             + d     depth of merged layers.
             + l     number of elements for each merged layer
-            + H2    Matrix Square of H
             + U     Tensor data structure storing merged layers and corresponding local Unitary
                     transformations
             + indexes   enumeration of all local unitaries
         '''
         self.D = D
-        self.rho = rho
-        if H is not None:
-            self.H = H
-        else:
-            self.H = H2
-        if H2 is not None:
-            self.H2 = H2
-        elif H is not None:
-            self.H2=H@H
-        if L is None:
-            self.L = np.int(np.log2(self.H2.size)/np.log2(dim**2))
-        else:
-            self.L = L
-        self.d = (self.D + 1) // 2
-        self.l = self.L - 1
-        self.U = np.empty([self.d, self.l, 4, 4], dtype='complex')
-        self.U[:] = np.eye(4)[np.newaxis, np.newaxis]
+        self.W = W
+        self.L = W + 1
+        self._D = (self.D + 1) // 2
+        self.U = np.empty([self._D, self.W, 4, 4], dtype='complex')
+        self.offset = 0
         self.indexes = list(self._visit_all())
+
+    def __contains__(self, ind):
+        return (ind[0] - ind[1] + self.offset)%2 == 0
 
     def __getitem__(self, ind):
         '''Get a local Unitary by layer depth and starting position'''
@@ -60,17 +48,23 @@ class LayersStruct:
         layer, pos = ind
         self.U[layer // 2, pos] = val
 
+    #def _visit_all(self):
+        #'''Enumerate all unitaries in order of dependency'''
+        #for d in range(self._D):
+            ## Even layers
+            #for i in np.arange(0, self.W, 2):
+                #yield (2 * d, i)
+            #if 2 * d + 1 >= self.D:
+                #break
+            ## Odd layers
+            #for i in np.arange(1, self.W, 2):
+                #yield (2 * d + 1, i)
+
     def _visit_all(self):
         '''Enumerate all unitaries in order of dependency'''
-        for d in range(self.d):
-            # Even layers
-            for i in np.arange(0, self.L - 1, 2):
-                yield (2 * d, i)
-            if 2 * d + 1 >= self.D:
-                break
-            # Odd layers
-            for i in np.arange(1, self.L - 1, 2):
-                yield (2 * d + 1, i)
+        for i in range(self.D):
+            for j in range((i+self.offset)%2, self.W, 2):
+                yield i, j
 
 def transform(op, U, sh0):
     '''Transform operator op with single U_{ij} to slots determined
@@ -83,19 +77,29 @@ def transform(op, U, sh0):
     return np.einsum("ij, kjl->kil", U, op.reshape(sh0, U.shape[0], -1))
 
 class LayersDense(LayersStruct):
+    def __init__(self, rho, H=None, D=4, dim=2, H2=None):
+        self.rho = rho
+        self.H = H
+        if H2 is None:
+            H2 = H@H
+        self.H2 = H2
+        L = np.int(np.log2(self.H2.size)/np.log2(dim**2))
+        super().__init__(L-1, D)
+        self.U[:] = np.eye(4)[np.newaxis, np.newaxis]
+
     def apply_single(self, ind, op, hc=False):
         '''
-        Apply multiple local unitaries to operator op
+        Apply single local unitary to operator op
         Args:
-            + inds  List of unitaries
+            + inds  Index of Unitary
             + op    operator to contract
             + hc    Hermitian conjugate of U3U2U1, which gives U1+U2+U3+'''
-        if not hc:
-            op = transform(op, self[ind], 2**ind[1])
-            op = transform(op, self[ind].conj(), 2**(ind[1]+self.L))
+        if hc:
+            U = self[ind].T.conj()
         else:
-            op = transform(op, self[ind].T.conj(), 2**ind[1])
-            op = transform(op, self[ind].T, 2**(ind[1]+self.L))
+            U = self[ind]
+        op = transform(op, U, 2**ind[1])
+        op = transform(op, U.conj(), 2**(ind[1]+self.L))
         return op
 
     def apply_list(self, inds, op, hc=False):
@@ -105,7 +109,8 @@ class LayersDense(LayersStruct):
             + inds  List of unitaries
             + op    operator to contract
             + hc    Hermitian conjugate of U3U2U1, which gives U1+U2+U3+'''
-        inds = inds[::-1] if hc else inds
+        if hc:
+            inds = inds[::-1]
         for ind in inds:
             op = self.apply_single(ind, op, hc)
         return op
@@ -179,7 +184,10 @@ class LayersDense(LayersStruct):
 
     #@profile
     def minimizeVarE_cycle(self, E=0, forward=True):
-        H2 = self.H2-(2*E)*self.H+E**2*np.eye(*self.H.shape)
+        if E:
+            H2 = self.H2-(2*E)*self.H+E**2*np.eye(*self.H.shape)
+        else:
+            H2 = self.H2
         l = []
         if forward:
             for sp, V in self.contract_cycle(H2):
@@ -214,10 +222,52 @@ class LayersDense(LayersStruct):
                 break
             last=cur
         return cur
+def rotl(U):
+    return U.reshape((2,)*4).transpose([2, 0, 3, 1]).reshape(4, 4)
+
+def rotr(U):
+    return U.reshape((2,)*4).transpose([1, 3, 0, 2]).reshape(4, 4)
+
+def index_structure(N, gapless):
+    if gapless:
+        k, mid = divmod(N, 4)
+        return (*(2,)*k, mid, *(2,)*k)
+    else:
+        k, mid = divmod(N-2, 4)
+        return (1, *(2,)*k, mid, *(2,)*k, 1)
 
 class LayersMPO(LayersStruct):
-    def apply_single(self, inds, op, hc=False):
-        if not hc:
+    def __init__(self, rho, H, D, W, H2):
+        '''Rho is '''
+        self.rho = rho
+        self.H2 = H2
+        self.H = H
+        # As we rotated our orientation, we use D as L, L as D
+        W, D = D, W
+        super().__init__(W, D)
+        I = rotl(np.eye(4))
+        self.U[:] = I[np.newaxis, np.newaxis]
+    def init_operator(self, mpo, row=0):
+        '''Number of indices is 2*(# of width)-1
+        1之存在于边缘，乃边缘空缺也
+        3之存在于间，乃矩阵乘积算子也
+        (1,2,2,1,2,2,1)
+        (2,2,3,2,2)
+        (1,2,2,3,2,2,1)
+        (2,2,2,1,2,2,2)
+        '''
+        N = 2*self.W-1
+        gapless = (row, 0) in self
+        struct = index_structure(N, gapless)
+        delta = np.eye(2).flatten()
+        D = [delta,]*self.L
+        op_list = D
+
+    def apply_single(self, ind, op, hc=False):
+        U = self[ind]
+        if hc:
+            U = U.T.conj()
+        if ind[1] == 0 or ind[1] == self.l:
             pass
 
 def minimize_local(H, rho, D=4, dim=2, n=100, rel=1e-6):
