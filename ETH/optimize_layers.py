@@ -72,18 +72,18 @@ class LayersStruct:
             for i in np.arange(1, self.L - 1, 2):
                 yield (2 * d + 1, i)
 
-class LayersDense(LayersStruct):
-    @staticmethod
-    def transform(op, U, i):
-        '''Transform operator op with single U to slot pair (i, i+1)
-        Args:
-            + op    operator to be transformed
-            + U     Unitary transformation
-            + i     index of slot i
-        '''
-        return np.einsum("ij, kjl->kil", U, op.reshape(2**i, 4, -1))
+def transform(op, U, sh0):
+    '''Transform operator op with single U_{ij} to slots determined
+    by sh0
+    Args:
+        + op    operator to be transformed
+        + U     Unitary transformation, should be a square matrix
+        + sh0   zeroth elem of shape, determines starting slot
+    '''
+    return np.einsum("ij, kjl->kil", U, op.reshape(sh0, U.shape[0], -1))
 
-    def apply_multi(self, inds, op, hc=False):
+class LayersDense(LayersStruct):
+    def apply_single(self, ind, op, hc=False):
         '''
         Apply multiple local unitaries to operator op
         Args:
@@ -91,18 +91,28 @@ class LayersDense(LayersStruct):
             + op    operator to contract
             + hc    Hermitian conjugate of U3U2U1, which gives U1+U2+U3+'''
         if not hc:
-            for ind in inds:
-                op = self.transform(op, self[ind], ind[1])
-                op = self.transform(op, self[ind].conj(), ind[1]+self.L)
+            op = transform(op, self[ind], 2**ind[1])
+            op = transform(op, self[ind].conj(), 2**(ind[1]+self.L))
         else:
-            for ind in inds[::-1]:
-                op = self.transform(op, self[ind].T.conj(), ind[1])
-                op = self.transform(op, self[ind].T, ind[1]+self.L)
+            op = transform(op, self[ind].T.conj(), 2**ind[1])
+            op = transform(op, self[ind].T, 2**(ind[1]+self.L))
+        return op
+
+    def apply_list(self, inds, op, hc=False):
+        '''
+        Apply multiple local unitaries to operator op
+        Args:
+            + inds  List of unitaries
+            + op    operator to contract
+            + hc    Hermitian conjugate of U3U2U1, which gives U1+U2+U3+'''
+        inds = inds[::-1] if hc else inds
+        for ind in inds:
+            op = self.apply_single(ind, op, hc)
         return op
 
     def contract_rho(self):
         '''Contract all unitaries to rho'''
-        rho = self.apply_multi(self.indexes, self.rho)
+        rho = self.apply_list(self.indexes, self.rho)
         return rho.reshape((2**self.L,)*2)
 
     def contract_hole(self, op1, op2, ind, middle=True, hc=True):
@@ -118,47 +128,47 @@ class LayersDense(LayersStruct):
         sh = (2**ind[1], 4, 2**(self.L - ind[1] - 2))*2
         '''Convention: we are optimizing rho side U, so U at ind is contracted with H'''
         if middle:
-            op2 = self.apply_multi((ind,), op2, hc=hc)
+            op2 = self.apply_single(ind, op2, hc=hc)
         return np.einsum('lonipk, ijklmn->mopj', op1.reshape(sh), op2.reshape(sh))
 
     #@profile
     def contract_naive(self, H, i):
         '''Contract lower part of U to rho, upper part to H
         Only for testing purpose'''
-        rho = self.apply_multi(self.indexes[:i], self.rho)
-        H = self.apply_multi(self.indexes[i+1:], H, hc=True)
+        rho = self.apply_list(self.indexes[:i], self.rho)
+        H = self.apply_list(self.indexes[i+1:], H, hc=True)
         return self.contract_hole(rho, H, self.indexes[i])
 
     def contract_cycle_for(self, *ops):
-        '''Contract all to operators as initial, optimize rho side'''
+        '''Forward: Contract all to operators as initial, optimize rho side'''
         rho = self.rho
-        ops = [self.apply_multi(self.indexes, op, hc=True) for op in ops]
+        ops = [self.apply_list(self.indexes, op, hc=True) for op in ops]
 
         for l, mid in zip([None]+self.indexes[:-1], self.indexes):
             # March to new U
             if l:
-                rho = self.apply_multi((l,), rho)
+                rho = self.apply_single(l, rho)
             # Contract
             V = [self.contract_hole(rho, H, mid, middle=False) for H in ops]
             # Retreat
             for i in range(len(ops)):
-                ops[i] = self.apply_multi((mid,), ops[i])
+                ops[i] = self.apply_single(mid, ops[i])
             yield (mid, *V)
 
     def contract_cycle_back(self, *ops):
-        '''Contract all to rho as initial, optimize H side'''
+        '''Backward: Contract all to rho as initial, optimize H side'''
         ops = list(ops)
-        rho = self.apply_multi(self.indexes, self.rho)
+        rho = self.apply_list(self.indexes, self.rho)
 
         for mid, r in zip(self.indexes[::-1], [None]+self.indexes[1:][::-1]):
             # March to new U
             if r:
                 for i in range(len(ops)):
-                    ops[i] = self.apply_multi((r,), ops[i], hc=True)
+                    ops[i] = self.apply_single(r, ops[i], hc=True)
             # Contract
             V = [self.contract_hole(H, rho, mid, middle=False) for H in ops]
             # Retreat
-            rho = self.apply_multi((mid,), rho, hc=True)
+            rho = self.apply_single(mid, rho, hc=True)
             yield (mid, *V)
 
     def contract_cycle(self, *ops, back=False):
@@ -204,6 +214,11 @@ class LayersDense(LayersStruct):
                 break
             last=cur
         return cur
+
+class LayersMPO(LayersStruct):
+    def apply_single(self, inds, op, hc=False):
+        if not hc:
+            pass
 
 def minimize_local(H, rho, D=4, dim=2, n=100, rel=1e-6):
     Y = LayersDense(rho, H, D=D, dim=dim)
