@@ -1,5 +1,5 @@
 from ETH import Rho
-from ETH.optimize_layers import LayersDense
+from ETH.optimize_layers import *
 from DMRG.Ising import nearest, Hamilton_XZ, Hamilton_XX
 from DMRG.spin import sigma
 from ETH.basic import *
@@ -21,7 +21,7 @@ def test_small_chain_varE(n, k, nit=50):
     Y = LayersDense(rho, H, D=4**(n-2)//(n-1)*2+1)
     last = np.inf
     for i in range(nit):
-        l = Y.minimizeVarE_cycle()
+        l = minimizeVarE_cycle(Y)
         assert all(l[:-1]+1e-6>=l[1:])
         assert l[0] <= last +1e-6
         if last-l[-1] < tol[n]*max(l[-1], 1)/100:
@@ -44,7 +44,7 @@ def test_local_H2(n, choice, k=0.5, d=2, tol=1e-4):
     mini = opt.min_expect(H2, rho)
     last = np.inf
     for i in range(50):
-        l = Y.minimizeVarE_cycle()
+        l = minimizeVarE_cycle(Y)
         if last-l[-1] < tol*l[-1]/100:
             break
         last = l[-1]
@@ -71,7 +71,7 @@ def test_reverse_engineering(n, k, nit=50, tol=1e-4):
     Y = LayersDense(rho2, H2=H2, D=3)
     last = np.inf
     for i in range(1000):
-        l = Y.minimizeVarE_cycle()
+        l = minimizeVarE_cycle(Y)
         if last-l[-1] < tol*l[-1]/100:
             break
         last = l[-1]
@@ -91,6 +91,6 @@ def test_for_back_symmetry():
     Y2 = LayersDense(rho2, rho, D=3)
     Y2.H2 = rho
     for i in range(2):
-        l1 = Y.minimizeVarE_cycle()
-        l2 = Y2.minimizeVarE_cycle(forward=False)
+        l1 = minimizeVarE_cycle(Y)
+        l2 = minimizeVarE_cycle(Y, forward=False)
         assert la.norm(l1-l2)<1e-2*la.norm(l1)

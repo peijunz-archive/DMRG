@@ -1,281 +1,55 @@
 import numpy as np
-import scipy.linalg as la
-import ETH.optimization as opt
-from ETH.basic import trace2
-from functools import reduce
+from . import optimization as opt
+from .basic import trace2
+from .Layers.LayersDense import LayersDense
 
-class LayersStruct:
-    def __init__(self, W, D, offset=0):
-        '''
-        Data structure:
-            Internally, local unitaries are stored in merged layers. Every layer contains
-            multiple unitaries. Mergerd layer is a collection of even/odd paired layers.
-            Its even/odd element is for even/odd layers, respectively.
-
-            When indexing U, conceputual (layer height, x position) is used. The __getitem__
-            will automatically convert it into self.U[layer_height//2]. The merged layer is
-            organized in even layer first order.
-
-        Args:
-            + D     depth of layers
-            + W     width of the circuit, if None, calculated from shape of rho and dim
-
-        Other Properties:
-            + d     depth of merged layers.
-            + l     number of elements for each merged layer
-            + U     Tensor data structure storing merged layers and corresponding local Unitary
-                    transformations
-            + indexes   enumeration of all local unitaries
-        '''
-        self.D = D
-        self.W = W
-        self.L = W + 1
-        self._D = (self.D + 1) // 2
-        self.U = np.empty([self._D, self.W, 4, 4], dtype='complex')
-        self.offset = 0
-        self.indexes = list(self._visit_all())
-
-    def __contains__(self, ind):
-        return (ind[0] - ind[1] + self.offset)%2 == 0
-
-    def __getitem__(self, ind):
-        '''Get a local Unitary by layer depth and starting position'''
-        layer, pos = ind
-        return self.U[layer // 2, pos]
-
-    def __setitem__(self, ind, val):
-        '''Get a local Unitary by layer depth and starting position'''
-        layer, pos = ind
-        self.U[layer // 2, pos] = val
-
-    #def _visit_all(self):
-        #'''Enumerate all unitaries in order of dependency'''
-        #for d in range(self._D):
-            ## Even layers
-            #for i in np.arange(0, self.W, 2):
-                #yield (2 * d, i)
-            #if 2 * d + 1 >= self.D:
-                #break
-            ## Odd layers
-            #for i in np.arange(1, self.W, 2):
-                #yield (2 * d + 1, i)
-
-    def _visit_all(self):
-        '''Enumerate all unitaries in order of dependency'''
-        for i in range(self.D):
-            for j in range((i+self.offset)%2, self.W, 2):
-                yield i, j
-
-def transform(op, U, sh0):
-    '''Transform operator op with single U_{ij} to slots determined
-    by sh0
-    Args:
-        + op    operator to be transformed
-        + U     Unitary transformation, should be a square matrix
-        + sh0   zeroth elem of shape, determines starting slot
-    '''
-    return np.einsum("ij, kjl->kil", U, op.reshape(sh0, U.shape[0], -1))
-
-class LayersDense(LayersStruct):
-    def __init__(self, rho, H=None, D=4, dim=2, H2=None):
-        self.rho = rho
-        self.H = H
-        if H2 is None:
-            H2 = H@H
-        self.H2 = H2
-        L = np.int(np.log2(self.H2.size)/np.log2(dim**2))
-        super().__init__(L-1, D)
-        self.U[:] = np.eye(4)[np.newaxis, np.newaxis]
-
-    def apply_single(self, ind, op, hc=False):
-        '''
-        Apply single local unitary to operator op
-        Args:
-            + inds  Index of Unitary
-            + op    operator to contract
-            + hc    Hermitian conjugate of U3U2U1, which gives U1+U2+U3+'''
-        if hc:
-            U = self[ind].T.conj()
-        else:
-            U = self[ind]
-        op = transform(op, U, 2**ind[1])
-        op = transform(op, U.conj(), 2**(ind[1]+self.L))
-        return op
-
-    def apply_list(self, inds, op, hc=False):
-        '''
-        Apply multiple local unitaries to operator op
-        Args:
-            + inds  List of unitaries
-            + op    operator to contract
-            + hc    Hermitian conjugate of U3U2U1, which gives U1+U2+U3+'''
-        if hc:
-            inds = inds[::-1]
-        for ind in inds:
-            op = self.apply_single(ind, op, hc)
-        return op
-
-    def contract_rho(self):
-        '''Contract all unitaries to rho'''
-        rho = self.apply_list(self.indexes, self.rho)
-        return rho.reshape((2**self.L,)*2)
-
-    def contract_hole(self, op1, op2, ind, middle=True, hc=True):
-        '''
-        In anology of U_{ij} O1_{jk} U+_{kl} O2_{li}. But we have extra legs
-        Args:
-            + op1   Operator in analogy of O1
-            + op2   Operator in analogy of O2
-            + ind   the hole to preserve
-            + middle    if True, contract U at ind with op2
-            + hc    Use U.T.conj() instead of U
-        '''
-        sh = (2**ind[1], 4, 2**(self.L - ind[1] - 2))*2
-        '''Convention: we are optimizing rho side U, so U at ind is contracted with H'''
-        if middle:
-            op2 = self.apply_single(ind, op2, hc=hc)
-        return np.einsum('lonipk, ijklmn->mopj', op1.reshape(sh), op2.reshape(sh))
-
-    #@profile
-    def contract_naive(self, H, i):
-        '''Contract lower part of U to rho, upper part to H
-        Only for testing purpose'''
-        rho = self.apply_list(self.indexes[:i], self.rho)
-        H = self.apply_list(self.indexes[i+1:], H, hc=True)
-        return self.contract_hole(rho, H, self.indexes[i])
-
-    def contract_cycle_for(self, *ops):
-        '''Forward: Contract all to operators as initial, optimize rho side'''
-        rho = self.rho
-        ops = [self.apply_list(self.indexes, op, hc=True) for op in ops]
-
-        for l, mid in zip([None]+self.indexes[:-1], self.indexes):
-            # March to new U
-            if l:
-                rho = self.apply_single(l, rho)
-            # Contract
-            V = [self.contract_hole(rho, H, mid, middle=False) for H in ops]
-            # Retreat
-            for i in range(len(ops)):
-                ops[i] = self.apply_single(mid, ops[i])
-            yield (mid, *V)
-
-    def contract_cycle_back(self, *ops):
-        '''Backward: Contract all to rho as initial, optimize H side'''
-        ops = list(ops)
-        rho = self.apply_list(self.indexes, self.rho)
-
-        for mid, r in zip(self.indexes[::-1], [None]+self.indexes[1:][::-1]):
-            # March to new U
-            if r:
-                for i in range(len(ops)):
-                    ops[i] = self.apply_single(r, ops[i], hc=True)
-            # Contract
-            V = [self.contract_hole(H, rho, mid, middle=False) for H in ops]
-            # Retreat
-            rho = self.apply_single(mid, rho, hc=True)
-            yield (mid, *V)
-
-    def contract_cycle(self, *ops, back=False):
-        if back:
-            return self.contract_cycle_back(*ops)
-        else:
-            return self.contract_cycle_for(*ops)
-
-    #@profile
-    def minimizeVarE_cycle(self, E=0, forward=True):
-        if E:
-            H2 = self.H2-(2*E)*self.H+E**2*np.eye(*self.H.shape)
-        else:
-            H2 = self.H2
-        l = []
-        if forward:
-            for sp, V in self.contract_cycle(H2):
-                self[sp], varE = opt.minimize_quadratic_local(V, self[sp])
-                l.append(varE)
-        else:
-            for sp, V in self.contract_cycle(H2, back=True):
-                U, varE = opt.minimize_quadratic_local(V, self[sp].T.conj())
-                self[sp] = U.T.conj()
-                l.append(varE)
-        return np.array(l)
-
-    def minimizeVar_cycle(self, forward=True):
-        l = []
-        if forward:
-            for sp, V, V2 in self.contract_cycle(self.H, self.H2):
-                self[sp], var = opt.minimize_var_local(V, V2, self[sp])
-                l.append(var)
-        else:
-            for sp, V, V2 in self.contract_cycle(self.H, self.H2, back=True):
-                U, var = opt.minimize_var_local(V, V2, self[sp].T.conj())
-                self[sp] = U.T.conj()
-                l.append(var)
-        return np.array(l)
-
-    def minimizeVar(self, n=100, rel=1e-10):
-        last = np.inf
-        for i in range(n):
-            cur = self.minimizeVar_cycle()
-            print(i, cur)
-            if last-cur < rel*cur:
-                break
-            last=cur
-        return cur
-def rotl(U):
-    return U.reshape((2,)*4).transpose([2, 0, 3, 1]).reshape(4, 4)
-
-def rotr(U):
-    return U.reshape((2,)*4).transpose([1, 3, 0, 2]).reshape(4, 4)
-
-def index_structure(N, gapless):
-    if gapless:
-        k, mid = divmod(N, 4)
-        return (*(2,)*k, mid, *(2,)*k)
+#@profile
+def minimizeVarE_cycle(Y, E=0, forward=True):
+    if E:
+        H2 = Y.H2-(2*E)*Y.H+E**2*np.eye(*Y.H.shape)
     else:
-        k, mid = divmod(N-2, 4)
-        return (1, *(2,)*k, mid, *(2,)*k, 1)
+        H2 = Y.H2
+    l = []
+    if forward:
+        for sp, V in Y.contract_cycle(H2):
+            Y[sp], varE = opt.minimize_quadratic_local(V, Y[sp])
+            l.append(varE)
+    else:
+        for sp, V in Y.contract_cycle(H2, back=True):
+            U, varE = opt.minimize_quadratic_local(V, Y[sp].T.conj())
+            Y[sp] = U.T.conj()
+            l.append(varE)
+    return np.array(l)
 
-class LayersMPO(LayersStruct):
-    def __init__(self, rho, H, D, W, H2):
-        '''Rho is '''
-        self.rho = rho
-        self.H2 = H2
-        self.H = H
-        # As we rotated our orientation, we use D as L, L as D
-        W, D = D, W
-        super().__init__(W, D)
-        I = rotl(np.eye(4))
-        self.U[:] = I[np.newaxis, np.newaxis]
-    def init_operator(self, mpo, row=0):
-        '''Number of indices is 2*(# of width)-1
-        1之存在于边缘，乃边缘空缺也
-        3之存在于间，乃矩阵乘积算子也
-        (1,2,2,1,2,2,1)
-        (2,2,3,2,2)
-        (1,2,2,3,2,2,1)
-        (2,2,2,1,2,2,2)
-        '''
-        N = 2*self.W-1
-        gapless = (row, 0) in self
-        struct = index_structure(N, gapless)
-        delta = np.eye(2).flatten()
-        D = [delta,]*self.L
-        op_list = D
+def minimizeVar_cycle(Y, forward=True):
+    l = []
+    if forward:
+        for sp, V, V2 in Y.contract_cycle(Y.H, Y.H2):
+            Y[sp], var = opt.minimize_var_local(V, V2, Y[sp])
+            l.append(var)
+    else:
+        for sp, V, V2 in Y.contract_cycle(Y.H, Y.H2, back=True):
+            U, var = opt.minimize_var_local(V, V2, Y[sp].T.conj())
+            Y[sp] = U.T.conj()
+            l.append(var)
+    return np.array(l)
 
-    def apply_single(self, ind, op, hc=False):
-        U = self[ind]
-        if hc:
-            U = U.T.conj()
-        if ind[1] == 0 or ind[1] == self.l:
-            pass
+def minimizeVar(Y, n=100, rel=1e-10):
+    last = np.inf
+    for i in range(n):
+        cur = minimizeVar_cycle(Y)
+        print(i, cur)
+        if last-cur < rel*cur:
+            break
+        last=cur
+    return cur
 
 def minimize_local(H, rho, D=4, dim=2, n=100, rel=1e-6):
     Y = LayersDense(rho, H, D=D, dim=dim)
     last = trace2(rho, Y.H2).real - trace2(rho, H).real**2
     vals = [last]
     for i in range(n):
-        l = Y.minimizeVar_cycle()
+        l = minimizeVar_cycle(Y)
         print(i, l)
         if last-l[-1] < rel*l[-1]:
             break
@@ -296,4 +70,4 @@ if __name__ == "__main__":
     rho = Rho.rho_prod_even(n, n/2, amp=0, rs=np.random)
     Y = LayersDense(rho, H, D=d)
     for i in range(10):
-        print(i, Y.minimizeVarE_cycle(forward=True))
+        print(i, minimizeVarE_cycle(Y, forward=True))

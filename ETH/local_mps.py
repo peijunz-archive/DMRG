@@ -4,6 +4,13 @@ This is for the local version of optimization. The Unitary transformation is res
 State, U, Contraction order, Optimization.
 
 State was already implemented in MPS.py
+
+Decomposition + Cone method
+
+|----------------------------|
+| Currently not in todo list |
+|----------------------------|
+
 '''
 
 import numpy as np
