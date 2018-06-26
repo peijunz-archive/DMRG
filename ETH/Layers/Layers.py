@@ -21,15 +21,15 @@ class LayersStruct:
             + l     number of elements for each merged layer
             + U     Tensor data structure storing merged layers and corresponding local Unitary
                     transformations
-            + indexes   enumeration of all local unitaries
+            + indices   enumeration of all local unitaries
         '''
         self.D = D
         self.W = W
         self.L = W + 1
         self._D = (self.D + 1) // 2
         self.U = np.empty([self._D, self.W, 4, 4], dtype='complex')
-        self.offset = 0
-        self.indexes = list(self._visit_all())
+        self.offset = offset
+        self.indices = list(self._visit_all())
 
     def __contains__(self, ind):
         return (ind[0] - ind[1] + self.offset)%2 == 0

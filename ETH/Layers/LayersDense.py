@@ -51,7 +51,7 @@ class LayersDense(LayersStruct):
 
     def contract_rho(self):
         '''Contract all unitaries to rho'''
-        rho = self.apply_list(self.indexes, self.rho)
+        rho = self.apply_list(self.indices, self.rho)
         return rho.reshape((2**self.L,)*2)
 
     def contract_hole(self, op1, op2, ind, middle=True, hc=True):
@@ -74,16 +74,16 @@ class LayersDense(LayersStruct):
     def contract_naive(self, H, i):
         '''Contract lower part of U to rho, upper part to H
         Only for testing purpose'''
-        rho = self.apply_list(self.indexes[:i], self.rho)
-        H = self.apply_list(self.indexes[i+1:], H, hc=True)
-        return self.contract_hole(rho, H, self.indexes[i])
+        rho = self.apply_list(self.indices[:i], self.rho)
+        H = self.apply_list(self.indices[i+1:], H, hc=True)
+        return self.contract_hole(rho, H, self.indices[i])
 
     def contract_cycle_for(self, *ops):
         '''Forward: Contract all to operators as initial, optimize rho side'''
         rho = self.rho
-        ops = [self.apply_list(self.indexes, op, hc=True) for op in ops]
+        ops = [self.apply_list(self.indices, op, hc=True) for op in ops]
 
-        for l, mid in zip([None]+self.indexes[:-1], self.indexes):
+        for l, mid in zip([None]+self.indices[:-1], self.indices):
             # March to new U
             if l:
                 rho = self.apply_single(l, rho)
@@ -97,9 +97,9 @@ class LayersDense(LayersStruct):
     def contract_cycle_back(self, *ops):
         '''Backward: Contract all to rho as initial, optimize H side'''
         ops = list(ops)
-        rho = self.apply_list(self.indexes, self.rho)
+        rho = self.apply_list(self.indices, self.rho)
 
-        for mid, r in zip(self.indexes[::-1], [None]+self.indexes[1:][::-1]):
+        for mid, r in zip(self.indices[::-1], [None]+self.indices[1:][::-1]):
             # March to new U
             if r:
                 for i in range(len(ops)):

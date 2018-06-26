@@ -63,7 +63,7 @@ def test_reverse_engineering(n, k, nit=50, tol=1e-4):
     mini = opt.min_expect(H2, rho)
     assert abs(trace2(rho, H2) - mini)<1e-6
     Y = LayersDense(rho, H2=H2, D=3)
-    for ind in Y.indexes:
+    for ind in Y.indices:
         Y[ind] = rand_unitary(np.eye(4), amp=0.1)
     rho2 = Y.contract_rho()
     assert trace2(rho2, H2) > mini
