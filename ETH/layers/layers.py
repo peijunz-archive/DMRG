@@ -1,6 +1,6 @@
 import numpy as np
 
-class LayersStruct:
+class Layers:
     def __init__(self, W, D, offset=0):
         '''
         Data structure:
@@ -32,7 +32,9 @@ class LayersStruct:
         self.indices = list(self._visit_all())
 
     def __contains__(self, ind):
-        return (ind[0] - ind[1] + self.offset)%2 == 0
+        d1 = self.D if ind[0] < 0 else 0
+        d2 = self.W if ind[1] < 0 else 0
+        return (ind[0] + d1 - ind[1] + d2 + self.offset)%2 == 0
 
     def __getitem__(self, ind):
         '''Get a local Unitary by layer depth and starting position'''

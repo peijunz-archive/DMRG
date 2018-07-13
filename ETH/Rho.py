@@ -47,14 +47,16 @@ def rand_rho_prod(n, rs=None, s=None):
 def product_rho(L, s=None):
     '''Generate rho by product of List of small ones'''
     rho = reduce(np.kron, L)
-    rho /= sum(rho)
+    #rho /= np.trace(rho)
     if s is None:
-        return np.diag(rho)
+        return rho
     else:
         return np.diag(rho_entropy(rho, s))
 
+def rho_prod_even(n, s, amp=None, rs=None):
+    return product_rho(rho_even(n, s, amp, rs))
 
-def rho_prod_even(n, s=0, amp=None, rs=None):
+def rho_even(n, s=0, amp=None, rs=None):
     s1 = s / n
     err = 1e-10
     if s1 < err:
@@ -65,10 +67,10 @@ def rho_prod_even(n, s=0, amp=None, rs=None):
         x = opt.bisect(lambda x: s1 + x * np.log2(x) + (1 - x)
                        * np.log2(1 - x) if x > 0 else s1, err, .5 - err)
     if rs:
-        rho = reduce(np.kron, [rand_rotate(np.diag([x, 1-x]), amp, rs=rs) for i in range(n)])
+        rho = [rand_rotate(np.diag([x, 1-x]), amp, rs=rs) for i in range(n)]
         return rho
     else:
-        return product_rho([[x, 1 - x]] * n)
+        return [np.diag([x, 1 - x])] * n
 
 def compare_segm(r1, r2, start, end):
     if start >= end:

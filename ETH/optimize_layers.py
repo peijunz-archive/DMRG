@@ -1,7 +1,7 @@
 import numpy as np
 from . import optimization as opt
 from .basic import trace2
-from .Layers.LayersDense import LayersDense
+from .layers.layers_dense import LayersDense
 
 #@profile
 def minimizeVarE_cycle(Y, E=0, forward=True):
@@ -67,7 +67,8 @@ if __name__ == "__main__":
     arg_tpl = {"n": n, "delta": 0.54, "g": 0.1}
     H = Hamilton_XZ(n)['H']
     #print(H)
-    rho = Rho.rho_prod_even(n, n/2, amp=0, rs=np.random)
-    Y = LayersDense(rho, H, D=d)
+    rho = Rho.rho_even(n, n/2, amp=0, rs=np.random)
+    print(rho)
+    Y = LayersDense(Rho.product_rho(rho), H, D=d)
     for i in range(10):
         print(i, minimizeVarE_cycle(Y, forward=True))

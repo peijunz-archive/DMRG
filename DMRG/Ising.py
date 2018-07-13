@@ -69,7 +69,7 @@ def Hamilton_TL(n, J=1, g=0.945, h=0.8090):
     '''Transverse field Ising model with Longitudinal field'''
     H_tpl = r'$H=-\sum J Z_iZ_{i+1}+\sum (gX_i+hZ_i)$'
 
-    H = nearest(n, sigma[3], sigma[3], coef=J).astype('double')
+    H = -nearest(n, sigma[3], sigma[3], coef=J).astype('double')
     H += nearest(n, sigma[1], coef=g)
     H += nearest(n, sigma[3], coef=h)
 

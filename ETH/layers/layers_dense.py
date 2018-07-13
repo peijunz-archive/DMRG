@@ -1,4 +1,4 @@
-from .Layers import LayersStruct
+from .layers import Layers
 import numpy as np
 def transform(op, U, sh0):
     '''Transform operator op with single U_{ij} to slots determined
@@ -10,7 +10,7 @@ def transform(op, U, sh0):
     '''
     return np.einsum("ij, kjl->kil", U, op.reshape(sh0, U.shape[0], -1))
 
-class LayersDense(LayersStruct):
+class LayersDense(Layers):
     def __init__(self, rho, H=None, D=4, dim=2, H2=None):
         self.rho = rho
         self.H = H
