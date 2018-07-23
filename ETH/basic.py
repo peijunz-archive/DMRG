@@ -33,7 +33,6 @@ def energy_var(H, rho, H2=None):
     res = trace2(H2, rho) - trace2(H, rho)**2
     return res.real
 
-
 def rand_unitary(rho, amp=None, rs=np.random):
     Hr, Hi = rs.randn(2, *rho.shape)
     H = Hr + 1j * Hi

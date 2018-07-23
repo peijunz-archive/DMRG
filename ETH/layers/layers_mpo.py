@@ -36,7 +36,7 @@ def MPO_TL(J=1, g=1, h=1):
         [L,    -J*Z,    I,      O,      O,      O],
         [Z@Z,   O,      O,      O,      O,      O],
         [LZ,   -J*Z@Z,  Z,      O,      O,      O],
-        [L@L,  -2*J*LZ, 2*L,  J*J*Z@Z,  2*J*Z,  I],
+        [L@L,  -2*J*LZ, 2*L,  J*J*Z@Z,  -2*J*Z,  I],
         ]).transpose([1,0,2,3])
     return mpo[:3, :3], mpo
 
@@ -157,23 +157,66 @@ class LayersMPO(Layers):
             op = transform(op, R, ind[1]-1)
             op = transform(op, dagger(R), -ind[1]-1)
             return op
+    def contract_hole(self, ind, l, r, mpo):
+        R = self[ind]
+        if self.W-1 == 0:
+            raise NotImplementedError
+        elif ind[1] == 0:
+            #print("contract rho")
+            '''Contract rho and then apply'''
+            # contract dagger(U) rho U, and apply to -ind[1]-1
+            l = l.reshape(2,-1,2)
+            r = r.reshape(2,-1,2)
+            lr_holes = np.einsum('imk, jml->ijkl', l, r)
+            return np.einsum('ijkl, ab, cd->bdijackl').reshape([4]*4)
+        elif ind[1] == self.W-1:
+            dmpo = np.einsum('ijkl, jomn->iokmln', mpo, mpo)
+            dmpo = dmpo.reshape(*mpo.shape[:2], *U.shape)
+            c = int(sqrt(dmpo.size))
+            lr = int(sqrt(l.size/c))
+            l.reshape([lr, 2, -1, 2, lr])
+            r.reshape([lr, 2, -1, 2, lr])
+            pass
+        else:
+            pass
     def contract_list(self, inds, op, mpo, rhs=False):
         if rhs:
             for i in inds[::-1]:
-                op = self.apply_pair(i, op, mpo, rhs)
+                op = self.apply_pair(i, op, mpo, True)
         else:
             #print(op.flatten())
             for i in inds:
                 op = self.apply_pair(i, op, mpo)
                 #print(i, op.flatten())
         return op
-    def contract_all(self, mpo):
+
+    def contract_all(self, mpo, rhs=False):
         "Test that contract all elements in different ways will give correct energy"
         Left = self.init_operator(mpo, row=0)
         Right = self.init_operator(mpo, row=-1)
-        Left = self.contract_list(self.indices, Left, mpo)
+        if rhs:
+            Right = self.contract_list(self.indices, Right, mpo, True)
+        else:
+            Left = self.contract_list(self.indices, Left, mpo)
         return np.dot(Left.flatten(), Right.flatten())
 
+    def sweep(self, mpo, N):
+        L = [self.init_operator(mpo, row=0)]
+        R = [self.init_operator(mpo, row=-1)]
+        for i in self.indices[1:][::-1]:
+            R.append(self.apply_pair(i, R[-1], mpo, True))
+        nblocks = len(self.indices)
+        for i in range(N):
+            # Forward
+            for j in self.indices[0:nblocks-1]:
+                yield j, L[-1], R[-1]
+                L.append(self.apply_pair(j, L[-1], mpo))
+                R.pop()
+            # Backward
+            for j in self.indices[nblocks-1:0:-1]:
+                yield j, L[-1], R[-1]
+                L.pop()
+                R.append(self.apply_pair(j, R[-1], mpo, True))
 if __name__ == "__main__":
     from ETH import Rho
     from numpy.random import RandomState
