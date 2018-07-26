@@ -53,7 +53,7 @@ def product_rho(L, s=None):
     else:
         return np.diag(rho_entropy(rho, s))
 
-def rho_prod_even(n, s, amp=None, rs=None):
+def rho_prod_even(n, s, amp=1, rs=None):
     return product_rho(rho_even(n, s, amp, rs))
 
 def rho_even(n, s=0, amp=None, rs=None):

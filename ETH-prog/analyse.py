@@ -54,7 +54,10 @@ def generate_args(arg_tpl, rs=np.random):
 
 def Collect(Hf, arg_tpl, _optimize, arg_opt, rs=np.random, rs_rot=np.random, ns=11, nit=10, pre=''):
     n = arg_tpl['n']
-    ns, s = mlinspace(ns)
+    if isinstance(ns, int):
+        s = mlinspace(ns)
+    else:
+        ns, s = len(ns), np.array(ns)
     S = n*s
     R = np.empty([ns, nit, 2**n, 2**n], dtype='complex128')
     H = np.empty_like(R)
@@ -67,6 +70,7 @@ def Collect(Hf, arg_tpl, _optimize, arg_opt, rs=np.random, rs_rot=np.random, ns=
             #H4 = Hf(**generate_args(arg_tpl, rs))['H']
             rho = Rho.rho_prod_even(n, s, rs=rs_rot)
             #print(rho, H4)
+            print(i, j, H.shape)
             H[i, j] = H4
             R[i, j] = _optimize(H4, rho, **arg_opt)
     result = {'Hamilton': Hf.__name__, 'S': S,

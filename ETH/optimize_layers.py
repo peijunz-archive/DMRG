@@ -47,16 +47,14 @@ def minimizeVar(Y, n=100, rel=1e-10):
 def minimize_local(H, rho, D=4, dim=2, n=100, rel=1e-6):
     Y = LayersDense(rho, H, D=D, dim=dim)
     last = trace2(rho, Y.H2).real - trace2(rho, H).real**2
-    vals = [last]
     for i in range(n):
         l = minimizeVar_cycle(Y)
         print(i, l)
         if last-l[-1] < rel*l[-1]:
             break
         last=l[-1]
-        vals.append(last)
     print("Exit at {}".format(i))
-    return Y.contract_rho(), vals
+    return Y.contract_rho()
 
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ if __name__ == "__main__":
     Y = LayersDense(Rho.product_rho(rho), H, D=d)
     for i in Y.indices:
         print(i)
-        Y[i] = rand_unitary(np.eye(4), rs=rs)
+        Y[i] = rand_unitary([4,4], rs=rs)
         L[i[::-1]] = ud2rl(Y[i].T.conj())
     R = Y.contract_rho()
     print(trace2(R, H@H).real)
