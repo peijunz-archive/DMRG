@@ -17,9 +17,10 @@ class LayersDense(Layers):
         if H2 is None:
             H2 = H@H
         self.H2 = H2
-        L = np.int(np.log2(self.H2.size)/np.log2(dim**2))
-        super().__init__(L-1, D)
-        self.U[:] = np.eye(4)[np.newaxis, np.newaxis]
+        self.L = np.int(np.log2(self.H2.size)/np.log2(dim**2))
+        super().__init__(self.L-1, D)
+        for i in self.visit_all():
+            self.U[i] = np.eye(4)
 
     def apply_single(self, ind, op, hc=False):
         '''

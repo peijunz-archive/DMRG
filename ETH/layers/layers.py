@@ -1,53 +1,40 @@
 import numpy as np
 
 class Layers:
-    def __init__(self, W, D, offset=0):
+    def __init__(self, W:int, D:int, offset:int=0):
         '''
-        Data structure:
-            Internally, local unitaries are stored in merged layers. Every layer contains
-            multiple unitaries. Mergerd layer is a collection of even/odd paired layers.
-            Its even/odd element is for even/odd layers, respectively.
-
-            When indexing U, conceputual (layer height, x position) is used. The __getitem__
-            will automatically convert it into self.U[layer_height//2]. The merged layer is
-            organized in even layer first order.
-
         Args:
-            + D     depth of layers
-            + W     width of the circuit, if None, calculated from shape of rho and dim
+            + D     depth of circuit
+            + W     width of circuit, equals to (chain length - 1)
+            + offset
 
         Other Properties:
-            + d     depth of merged layers.
-            + l     number of elements for each merged layer
             + U     Tensor data structure storing merged layers and corresponding local Unitary
                     transformations
             + indices   enumeration of all local unitaries
         '''
         self.D = D
         self.W = W
-        self.L = W + 1
-        self._D = (self.D + 1) // 2
-        self.U = np.empty([self._D, self.W, 4, 4], dtype='complex')
-        self.offset = offset
-        self.indices = list(self._visit_all())
+        self.U = np.empty([self.D, self.W], dtype='object')
+        self.offset = offset%2
+        for i, j in self.visit_all():
+            self.U[i, j] = np.empty([4, 4], dtype='complex')
+        self.indices = list(self.visit_all())
 
     def __contains__(self, ind):
-        d1 = self.D if ind[0] < 0 else 0
-        d2 = self.W if ind[1] < 0 else 0
-        return (ind[0] + d1 - ind[1] + d2 + self.offset)%2 == 0
+        return self.U[ind] is not None
 
     def __getitem__(self, ind):
-        '''Get a local Unitary by layer depth and starting position'''
-        layer, pos = ind
-        return self.U[layer // 2, pos]
+        '''Get a local Unitary by layer depth and starting x position'''
+        return self.U[ind]
 
     def __setitem__(self, ind, val):
-        '''Get a local Unitary by layer depth and starting position'''
-        layer, pos = ind
-        self.U[layer // 2, pos] = val
+        '''Get a local Unitary by layer depth and starting x position'''
+        self.U[ind] = val
 
-    def _visit_all(self):
+    def visit_all(self):
         '''Enumerate all unitaries in order of dependency'''
         for i in range(self.D):
-            for j in range((i+self.offset)%2, self.W, 2):
-                yield i, j
+            for j in range(self.W):
+                if (i+j+self.offset)%2 == 0:
+                    yield i, j

@@ -83,8 +83,8 @@ class LayersMPO(Layers):
 
     def init_operator(self, mpo, row=0):
         '''Number of indices is 2*(# of width)-1
-        边缘之1，空缺也
-        中间之3，矩阵乘积算子也
+        1 on the edge，is dangling 
+        3 in the middle is matrix operator
         (1,2,2,1,2,2,1)
         (2,2,3,2,2)
         (1,2,2,3,2,2,1)
@@ -174,11 +174,13 @@ class LayersMPO(Layers):
             dmpo = dmpo.reshape(*mpo.shape[:2], *U.shape)
             c = int(sqrt(dmpo.size))
             lr = int(sqrt(l.size/c))
-            l.reshape([lr, 2, -1, 2, lr])
-            r.reshape([lr, 2, -1, 2, lr])
-            pass
+            l = l.reshape([lr, 2, -1, 2, lr])
+            r = r.reshape([lr, 2, -1, 2, lr])
+            hole = np.einsum('ijklm,inopm,koqrst->jqnrlspt', l, r, dmpo)#???
+            return hole
         else:
-            pass
+            l = l.reshape([lr, 2, -1, 2, lr])
+            
     def contract_list(self, inds, op, mpo, rhs=False):
         if rhs:
             for i in inds[::-1]:
