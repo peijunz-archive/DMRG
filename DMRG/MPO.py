@@ -1,4 +1,4 @@
-'''Matrix Product Operator
+'''Matrix Product Operator DEPRECATED
 
 Express the Hamiltonian of the system in terms of matrix product operator.
 

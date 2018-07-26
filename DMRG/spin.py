@@ -1,54 +1,74 @@
 '''Generalized Pauli Matrices and Spin operators
 
 + S means spin operator,
-+ s means sigma operator
++ sigma means Pauli matrices for spin 1/2 systemb
 '''
 import numpy as np
 
 
-def dof(S):
-    return round(2 * S + 1)
+def dof(s):
+    '''
+    Degree of freedom for spin s space
+    Args:
+        s   integer or half integer'''
+    return round(2 * s + 1)
 
 
-def I(S=1/2):
-    '''Identity Matrix'''
-    return np.eye(dof(S))
+def I(s=1/2):
+    '''Identity Matrix
+    Args:
+        s   integer or half integer'''
+    return np.eye(dof(s))
 
-def R(S=1/2):
-    '''Reverse all the spins'''
-    return I(S)[::-1]
+def R(s=1/2):
+    '''Reverse all the spins
+    Args:
+        s   integer or half integer'''
+    return I(s)[::-1]
 
-def Z(S=1/2):
-    '''S_z spin matrix'''
-    return np.diag(np.arange(S, -S - 0.1, -1))
+def Z(s=1/2):
+    '''S_z spin matrix
+    Args:
+        s   integer or half integer'''
+    return np.diag(np.arange(s, -s - 0.1, -1))
 
 
-def P(S=1 / 2):
-    '''S_+ spin matrix'''
-    m = np.zeros([dof(S)] * 2)
-    for i in range(dof(S) - 1):
-        k = S - i
-        m[i, i + 1] = np.sqrt(S * (S + 1) - k * (k - 1))
+def P(s=1 / 2):
+    '''S_+ spin matrix
+    Args:
+        s   integer or half integer'''
+    m = np.zeros([dof(s)] * 2)
+    for i in range(dof(s) - 1):
+        k = s - i
+        m[i, i + 1] = np.sqrt(s * (s + 1) - k * (k - 1))
     return m
 
 
-def N(S=1 / 2):
-    '''S_- spin matrix'''
-    return P(S).transpose()
+def N(s=1 / 2):
+    '''S_- spin matrix
+    Args:
+        s   integer or half integer'''
+    return P(s).transpose()
 
 
-def X(S=1 / 2):
-    '''S_x spin matrix'''
-    return (P(S) + N(S)) / 2
+def X(s=1 / 2):
+    '''S_x spin matrix
+    Args:
+        s   integer or half integer'''
+    return (P(s) + N(s)) / 2
 
 
-def Y(S=1 / 2):
-    '''S_y spin matrix'''
-    return (P(S) - N(S)) / (2j)
+def Y(s=1 / 2):
+    '''S_y spin matrix
+    Args:
+        s   integer or half integer'''
+    return (P(s) - N(s)) / (2j)
 
 
 def S(s=1 / 2):
-    '''Spin matrices (S_0, S_x, S_y, S_z)'''
+    '''Spin matrices (S_0, S_x, S_y, S_z)
+    Args:
+        S   integer or half integer'''
     return I(s), X(s), Y(s), Z(s)
 
 
