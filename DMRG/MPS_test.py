@@ -60,7 +60,7 @@ class TestMPS(unittest.TestCase):
         l1 = ak.evolve(s, n=n, time=1, k=10)
         l2 = np.exp(-1j*E*(np.arange(n)+1))
         np.testing.assert_allclose(l1, l2)
-
+        ak.correlator(s)
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,6 +2,7 @@ from .layers import Layers
 import numpy as np
 from typing import Tuple, List
 
+
 def transform(op, U, sh0):
     """
     Transform operator with single local :math:`U_{ij}` to slots determined
@@ -242,7 +243,17 @@ class LayersDense(Layers):
             yield (mid, *V)
 
     def contract_cycle(self, *ops, back=False):
-        '''Wrapper for forward/backward contraction cycle'''
+        '''Wrapper for forward/backward contraction cycle
+
+        Args
+        ----
+        back: bool
+            Use backward cycle if True. Default is forward.
+
+        Returns
+        ----
+            generator
+        '''
         if back:
             return self.contract_cycle_back(*ops)
         else:

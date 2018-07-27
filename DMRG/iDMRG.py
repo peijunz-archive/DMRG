@@ -1,8 +1,8 @@
 '''iDMRG based on MPO and MPS
 
 Use MPO to solve ground state energy
-
 '''
+
 import numpy as np
 import scipy.sparse.linalg as SL
 import scipy.linalg as LA
@@ -57,7 +57,7 @@ def next_LR(L, R, M):
     U, S, V = halve(vec, halfshape(A))
     L = np.einsum('ijk, ilA, jmB, kClm', L, U, U.conj(), M)
     R = np.einsum('ijk, Ali, Bmj, Cklm', R, V, V.conj(), M)
-    return L, R, val
+    return L, R, val[0]
 
 
 if __name__ == "__main__":

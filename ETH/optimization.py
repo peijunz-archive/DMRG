@@ -5,7 +5,6 @@ import scipy.optimize as opt
 from .basic import *
 from functools import partial
 from itertools import permutations
-# @profile
 
 
 '''Global parts'''
@@ -103,7 +102,7 @@ def minimize_var_fix(H, rho, E, meps=10, nit=100, err=0):
 def minimize_var_nfix(H, rho, meps=10, nit=100, err=0):
     H2 = H@H
     f = partial(energy_var, H, H2=H2)
-    #f = lambda r: trace2(r, H2).real-trace2(r, H).real**2
+    # f = lambda r: trace2(r, H2).real-trace2(r, H).real**2
     df = partial(gradient, H, H2=H2, err=err)
     return minimize_rho(rho, f, df, meps, nit, err)
 
