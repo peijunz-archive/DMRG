@@ -1,24 +1,34 @@
-'''Matrix product state class
+"""Matrix product state class
 
 Infrastructure for DMRG and iTEBD
 
-'''
+"""
 import math
 import numpy as np
 import scipy.linalg as la
 import copy
 from . import ST
-
+from typing import List
 
 def truncate(s, trun, err):
-    '''
+    """
     Truncate s based on trun or err, whichever results in smaller bond dimension.
-    Args:
-        s       The eigenvalues of density matrix that need to be truncated
-        trun    The max bond dimension to preserve
-        err     If an eigenvalue is smaller than err * max_eigval,
-                then it will be truncated
-    '''
+
+    Args
+    ----
+        s: np.ndarray
+            The eigenvalues of density matrix that need to be truncated
+        trun: int
+            The max bond dimension to preserve
+        err: float
+             If an eigenvalue is smaller than err * max_eigval, it would be truncated
+    Returns
+    ----
+        np.ndarray:
+            Truncated eigenvalues
+        int:
+            Number of surviving eigenvalues
+    """
     s /= s[0]
     ind = sum(np.abs(s) > err)
     ind = min(ind, trun)
@@ -28,33 +38,84 @@ def truncate(s, trun, err):
 
 
 def svd_truncate(m, trun=20, err=1e-10):
-    '''Do SVD to density matrix m and then truncate with parameters trun and err'''
+    """Do SVD and then truncate with parameters trun and err"""
     u, s, v = la.svd(m, full_matrices=False)
     s, k = truncate(s, trun, err)
     return u[:, :k], s, v[:k]
 
 
 class MPS:
-    '''Length:
-    + o --- L+1: 0~L
-    + x --- L+1: 0~L
-    + v --- L+2: (-1), 0, 1,..., L-1, (L)
+    """Matrix Product state
+
+    Attributes
+    ----------
+    s: np.ndarray
+        Eigenvalues in each bond, i.e. circles. Use MPS.Sl or MPS.Sr
+        to get the circle in the left/right of a site
+    M: np.ndarray
+        list of local tensors, i.e. Triangles
+    x: np.ndarray
+        Bond dimensions. Use MPS.xl/MPS.xr to get the left/right of
+        a site
+    dim: int
+        dimension for local site
+    L: int
+        Length of chain
+    trun: int
+        Refer to truncate
+    err: float
+        Refer to truncate
+
+
+    Notes
+    -----
+    Example of MPS
+
+    .. code::
+        1 -- v -- 2 -- v -- 2 -- v -- 1
+             |         |         |
+             2         2         2
+
+    + dim is 2 for all sites
+    + Number of sites(represented by v) is 3
+    + Bond dimension chi = (1, 2, 2, 1)
+        + For a Closed MPS, x[0]=x[n]=1. But if we keep some boundaries open,
+          for example x[n] > 1, then there is a series of MPS, which
+          may be used to construct some other MPS by contraction.
+    + Local tensors has shapes [(1, 2, 2), (2, 2, 2), (2, 2, 1)]
+
+    Physical data structure
+    ^^^^^^^^^^^^^^^^^^^^^^^
+
+    Length of every element:
+        + Circles o --- L+1: 0~L
+        + Bonds x(chi) --- L+1: 0~L
+        + Sites --- L+2: (-1), 0, 1,..., L-1, (L)
+            + There are two dummy sites at -1 and L to ease coding
+
+    Canonical form
+    ^^^^^^^^^^^^^^^
+
     It is in B form, where M includes the right circle
-    '''
+
+    """
 
     def __init__(self, arg=(1, 1), dim=2, trun=20, err=1e-6):
-        '''
-        Args:
-            arg     It may be x or M, only one of them is needed.
-                    + x (chi) is an array of bond dimension with list length n+1,
+        """
+        Args
+        ---
+            arg:
+                It may be x(chi) or M, only one of them is needed.
+                + x (chi) is an array of bond dimension with list length n+1,
                       so we have x[0]...x[n] and has shape (x[i], x[i+1]) for M[i] where i is in range(0, n)
-                    + M is the actual MPS
-            dim     Hilbert space dimension for each site
-            trun, err   Refer to truncate
-        Notes:
-            For a Closed MPS, x[0]=x[n]=1. But if we keep some boundaries open, for example x[n] > 1,
-            then there is a series of MPS, which may be used to construct some other MPS by contraction.
-        '''
+                + M is the actual MPS
+            dim: int
+                Hilbert space dimension for each site
+            trun: int
+                Refer to truncate
+            err: float
+                Refer to truncate
+        """
         if isinstance(arg[0], np.ndarray):
             self.from_M(arg)
         else:
@@ -68,12 +129,34 @@ class MPS:
         self.err = err
 
     def from_chi(self, x, dim):
+        """Construct MPS from chi
+
+        Args
+        ---
+            x: np.ndarray
+                1 dimensional array specifying bond dimensions
+            dim: int
+        """
         self.dim = dim
         self.x = np.array(x, dtype='i8')
         self.L = len(x) - 1
         self.M = [np.zeros(self.shape(i), 'complex') for i in range(self.L)]
 
     def from_M(self, M):
+        """Construct MPS from M
+
+        Notes
+        -----
+        Every element of M is a local tensors T_{ijk}:
+        .. code::
+            i ---- T ---- k
+                   |
+                   j
+
+        Args
+        ---
+            M: List[np.ndarray]
+        """
         L = [m.shape[0] for m in M]
         R = [m.shape[-1] for m in M]
         d = [m.shape[1] for m in M]
@@ -88,10 +171,14 @@ class MPS:
 
     @staticmethod
     def naive(*local):
-        '''
-        Generate MPS (without entanglement entropy) from local density matrices
-        Args:
-            local   list of density matrix'''
+        """
+        Generate MPS (without entanglement entropy) from local states
+
+        Args
+        ---
+            local:
+                list of local states
+        """
         if len(local) == 1:
             local = local[0]
         if isinstance(local[0], int):
@@ -100,23 +187,30 @@ class MPS:
         return MPS(local)
 
     def __getitem__(self, ind)->float:
-        '''Calculate product to local MPS generated by ind
+        """Calculate product to local MPS generated by ind
         Args:
-            ind     list of density matrix at each site
-        '''
+            ind: list of density matrix at each site
+        """
         return self.naive(ind).dot(self)
 
     def shape(self, i):
-        '''Shape of the i-th MPS matrix'''
+        """Shape of the i-th MPS matrix
+
+        Args
+        ---
+            i: int
+                Index of site
+        """
         return self.xl[i], self.dim, self.xr[i]
 
     def graph(self):
-        '''
+        """
         Generate graph of MPS like:
-        1 -- v -- 2 -- v -- 1
-             |         |
-             2         2
-        '''
+        .. code::
+            1 -- v -- 2 -- v -- 1
+                 |         |
+                 2         2
+        """
         s = '-- v --'.join('{:^3}'.format(i) for i in self.x)
         w = ''.join(['|' if i == 'v' else ' ' for i in s])
         n = w.replace('  |  ', '{:^5}'.format(self.dim))
@@ -130,22 +224,32 @@ class MPS:
 
     @property
     def Sl(self):
+        """Left circles"""
         return self.s[:-1]
 
     @property
     def Sr(self):
+        """Right Circles"""
         return self.s[1:]
 
     @property
     def xl(self):
+        """Left bond dimensions"""
         return self.x[:-1]
 
     @property
     def xr(self):
+        """Right bond dimensions"""
         return self.x[1:]
 
     def ortho_left_site(self, i):
-        '''Left orthogonalization'''
+        """Left orthogonalization
+
+        Args
+        ---
+            i: int
+                Index of site
+        """
         # Preparing
         before = (-1, self.xr[i])
         after = (self.xl[i], self.dim, -1)
@@ -159,7 +263,13 @@ class MPS:
         self.M[i + 1] = np.einsum('al, lcr->acr', v, self.M[i + 1])
 
     def ortho_right_site(self, i):
-        '''Right orthogonalization'''
+        """Right orthogonalization
+
+        Args
+        ---
+            i: int
+                Index of site
+        """
         # Preparing
         before = (self.xl[i], -1)
         after = (-1, self.dim, self.xr[i])
@@ -173,7 +283,7 @@ class MPS:
         self.M[i - 1] = np.einsum('lcr, ra->lca', self.M[i - 1], u)
 
     def unify_end(self):
-        '''Remove possible exp(it) in auxillary M[-1] and M[L]'''
+        """Remove possible exp(it) in auxiliary M[-1] and M[L]"""
         if self.xl[0] == 1:
             self.M[0] /= self.M[-1][0, 0, 0]
             self.M[-1][0, 0, 0] = 1
@@ -182,7 +292,7 @@ class MPS:
             self.M[self.L][0, 0, 0] = 1
 
     def canon(self):
-        '''Decompose MPS into ΓΛΓΛΓΛΓΛΓ'''
+        """Decompose MPS into ΓΛΓΛΓΛΓΛΓ"""
         for i in range(self.L):
             self.ortho_left_site(i)
         for i in reversed(range(self.L)):
@@ -191,14 +301,26 @@ class MPS:
         self.canonical = True
 
     def B(self, i):
-        '''Matrix after Orthonormalization'''
+        """B Matrix after Orthonormalization"""
         return self.M[i]
 
     def block_single(self, i):
-        '''Center Matrix with both circles'''
+        """Matrix at a site with both circles, i.e. Combine Left circle and B matrix"""
         return self.Sl[i][:, np.newaxis, np.newaxis] * self.M[i]
 
     def block(self, start, n):
+        """MPS state for sites in the middle
+
+        Args
+        ---
+            start: int
+                Starting site
+            n: int
+                Number of sites
+        Returns
+        ---
+            MPS state for sites [start, start+n). It has included circle in the edge
+        """
         s = self.block_single(start)
         for i in range(start+1, start+n):
             s = np.einsum('abc, cde->abde', s, self.B(i))
@@ -206,8 +328,7 @@ class MPS:
         return s
 
     def verify_shape(self):
-        '''Verify that x is compatible with M'''
-        # print(self.M)
+        """Verify that x is compatible with M"""
         for i in range(self.L):
             expt = self.shape(i)
             got = self.M[i].shape
@@ -215,7 +336,16 @@ class MPS:
             assert expt == got, m
 
     def dot(self, rhs):
-        '''Inner product between two wavefunctions'''
+        """Inner product between two wavefunctions
+
+        Args
+        ---
+            rhs: MPS
+        Returns
+        ---
+            float:
+                inner product
+        """
         assert self.dim == rhs.dim, "Shape conflict between states"
         E = np.einsum('lcr, lcj->rj', self.block_single(0).conj(), rhs.block_single(0))
         for i in range(1, self.L):
@@ -224,10 +354,22 @@ class MPS:
 
     #@profile
     def corr(self, *ops):
-        '''oplist should be a list of ordered operators applied sequentially like
-        (4, sigma[3]), (6, sigma[2]), (7, sigma[1]), which means
-        E[Z_4 Y_6 X_7]
-        '''
+        """Correlation function of operators
+
+        Args
+        ----
+            *ops: Tuple[int, np.ndarray]
+                Every element is a tuple of site index and operators applied in it.
+                They should passed into corr in index sorted order.
+        Returns
+        ---
+            float:
+                Correlation function
+
+        Examples
+        ---
+        ops = [(4, sigma[3]), (6, sigma[2]), (7, sigma[1])]
+        """
         assert(self.canonical)
         D = dict(ops)
         if len(D.keys()) == 0:
@@ -243,6 +385,21 @@ class MPS:
         return np.trace(E).real
 
     def measure(self, start, op, Hermitian=True):
+        """Measure a operator over several sites
+
+        Args
+        ----
+            start: int
+                starting site
+            op: np.ndarray
+                The multiple sites operater
+            Hermitian: bool
+                Pass True if the operator is Hermitian
+        Returns
+        ----
+            float:
+                Expectation value of operator
+        """
         n = round(math.log(op.size, self.dim)/2)
         s = self.block(start, n)
         ret = np.einsum('abd, aed, be', s, s.conj(), op, optimize=False)
@@ -250,20 +407,37 @@ class MPS:
 
     #@profile
     def update_single(self, U, i, unitary=True):
-        '''Apply U at single site i'''
+        """Single site update
+        Args:
+            U: np.ndarray
+                Single site transformation operator
+            i: int
+                site index
+            unitary:
+                Unitarity of U. For virtual time iTEBD, it is not unitary.
+        """
         self.M[i] = np.einsum('lcr, dc->ldr', self.M[i], U)
         if not unitary:
             self.ortho_left_site(i)
 
     #@profile
     def update_double(self, U, i, unitary=True):
-        '''Double site i, i+1 ?unitary update
+        """Double site update
+        Args:
+            U: np.ndarray
+                Single site transformation operator
+            i: int
+                index of left site
+            unitary:
+                Unitarity of U. For virtual time iTEBD, it is not unitary.
 
+        Notes
+        -----
         + For unitary update, there is no need to affect boundary.
         + For virtual time, exp(-tau*H) is no longer unitary. Update site i+1
             + For non unitary case, if we update from left to right, then we
               can easily make it left orthogonalized, but not right.
-            + After one run from L to R, we should R-orthogonalize the chain.'''
+            + After one run from L to R, we should R-orthogonalize the chain."""
         mb = np.einsum('lcr, rjk, abcj->labk', self.B(i), self.B(i + 1), U)
         m = self.Sl[i][:, np.newaxis, np.newaxis, np.newaxis] * mb
         sh = m.shape
@@ -278,10 +452,21 @@ class MPS:
             self.ortho_left_site(i + 1)
 
     def update_k(self, U, i, k, unitary=True):
-        '''General multiple sites update'''
-        pass
+        """General multiple sites update"""
+        raise NotImplementedError
 
     def iTEBD_double(self, H, t, n):
+        """iTEBD algorithm for nearest interaction
+
+        Args
+        ---
+            H: np.ndarray
+                Two site interaction Hamiltonian
+            t: float
+                Time length for evolution
+            n: int
+                Number of time slices
+        """
         def even_update(k):
             U = la.expm(-1j * H * k * t).reshape([self.dim] * 4)
             def _even_update():
@@ -300,6 +485,13 @@ class MPS:
         return copy.deepcopy(self)
 
     def testCanon(self, err=1e-13):
+        """Test that the MPS is really in canonical form
+
+        Args
+        ----
+        err: float
+            Error tolerance
+        """
         for i in range(self.L):
             S = self.block_single(i)
             TSS = np.einsum("ijk, ijn->kn", S.conj(), S)
