@@ -1,4 +1,4 @@
-"""AKLT Model
+"""AKLT Model: TEST CASE
 
 A simple test case for MPS
 """

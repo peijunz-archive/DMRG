@@ -2,15 +2,15 @@
 
 from typing import Tuple, List, Callable
 
+# A list of which task should do how long time sequentially
 Taskline = List[Tuple[int, float]]
+
+# A list of callable. Every callable element generates
+# functions to apply operators
 Pipeline = List[Callable[[int], Callable]]
 
 
 def streamline(tasks: Taskline) -> Taskline:
-    '''
-    Args:
-        A list of which task should do how long time sequentially
-    '''
     L = len(tasks)
     i = -1
     for j in range(L):
@@ -23,9 +23,6 @@ def streamline(tasks: Taskline) -> Taskline:
 
 
 def do_tasks(tasks: Taskline, funs: Pipeline)->None:
-    '''
-    Args:
-        funs    A list of callable generator to apply operators'''
     tasks = streamline(tasks)
     '''Generate a list of callables from funs'''
     ready = {t: funs[t[0]](t[1]) for t in set(tasks)}
@@ -35,22 +32,32 @@ def do_tasks(tasks: Taskline, funs: Pipeline)->None:
 
 def ST1_tasks(L: int, n: int)->Taskline:
     '''First Order Suzuki Trotter Expansion
-    Args:
-        L:  Number of operators
-        n:  1/n is the step size of expansion
-    Return:
-        A list of which task should do how long time sequentially
+
+    Args
+    ----
+        L:
+            Number of operators
+        n:
+            1/n is the step size of expansion
+    Returns
+    ---
+        tasks: Taskline
     '''
     return [[i, 1./n] for i in range(L)]*n
 
 
 def ST2_tasks(L: int, n: int)->Taskline:
     '''Second Order Suzuki Trotter Expansion
-    Args:
-        L:  Number of operators
-        n:  1/n is the step size of expansion
-    Return:
-        A list of which task should do how long time sequentially
+
+    Args
+    ----
+        L:int
+            Number of operators
+        n:int
+            Number of time slices
+    Returns
+    ----
+        tasks: Taskline
     '''
     l = [[i, 0.5/n] for i in range(L)]
     l += l[::-1]
@@ -59,19 +66,23 @@ def ST2_tasks(L: int, n: int)->Taskline:
 
 def ST1(funs: Pipeline, n: int)->None:
     '''Do functions by ST1 expansion
-    Args:
-        funs    A list of callable to apply operators
-        n       Granularity of time slice
-    Return: None
+
+    Args
+    ----
+        funs: Pipeline
+        n: int
+            Number of time slices
     '''
     do_tasks(ST1_tasks(len(funs), n), funs)
 
 
 def ST2(funs: Pipeline, n: int)->None:
     '''Do functions by ST2 expansion
-    Args:
-        funs    A list of callable generator to apply operators
-        n       Granularity of time slice
-    Return: None
+
+    Args
+    ----
+        funs: Pipeline
+        n: int
+            Number of time slices
     '''
     do_tasks(ST2_tasks(len(funs), n), funs)
