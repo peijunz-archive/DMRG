@@ -3,7 +3,7 @@ import numpy as np
 from functools import partial
 import bhopping as bh
 from scipy.misc import imresize, imsave
-from cat import *
+from .cat import *
 import matplotlib.animation as animation
 
 def evolve_graph(H, wavepack, n=12, kd=1, fname=None, sample=None):

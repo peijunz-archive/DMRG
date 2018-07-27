@@ -239,7 +239,7 @@ class BMPS(MPS):
 if __name__ == '__main__':
     from pylab import *
     H = {"omega0":0, "g":0, "u":0, "h":0, 'K':1}
-    wavepack = {"dk":0.5, "center":5, "k_c":-np.pi/2, "trun":False, 'alpha':2}
+    wavepack = {"dk":0.5, "center":5, "k_c":-np.pi/2, "trun":True, 'alpha':2}
     psi = BMPS(10, 1, H, wavepack)
     l = psi.evolve_measure(np.pi, k=10)
     print(psi.M)

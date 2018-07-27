@@ -1,4 +1,4 @@
-import cat
+from . import cat
 import pytest
 import numpy as np
 import scipy.linalg as la

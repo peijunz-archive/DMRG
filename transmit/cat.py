@@ -1,6 +1,7 @@
-'''Basic tools of quantum info visualization of state
-Also single state tools
+'''Basic tools of quantum info visualization for states
+Also single particle state tools
 '''
+
 import numpy as np
 import scipy.linalg as la
 import matplotlib.pyplot as plt
