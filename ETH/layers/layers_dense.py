@@ -66,7 +66,7 @@ class LayersDense(Layers):
         self.H2 = H2
         self.L = np.int(np.log2(self.H2.size)/np.log2(dim**2))
         super().__init__(self.L-1, D)
-        for i in self.visit_all():
+        for i in self.traversal():
             self.U[i] = np.eye(4)
 
     def apply_single(self, ind, op, hc=False):
