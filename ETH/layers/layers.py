@@ -1,7 +1,8 @@
 import numpy as np
 
+
 class Layers:
-    def __init__(self, W:int, D:int, offset:int=0):
+    def __init__(self, W: int, D: int, offset: int=0):
         '''
         Args:
             + D     depth of circuit
@@ -16,7 +17,7 @@ class Layers:
         self.D = D
         self.W = W
         self.U = np.empty([self.D, self.W], dtype='object')
-        self.offset = offset%2
+        self.offset = offset % 2
         for i, j in self.visit_all():
             self.U[i, j] = np.empty([4, 4], dtype='complex')
         self.indices = list(self.visit_all())
@@ -36,5 +37,5 @@ class Layers:
         '''Enumerate all unitaries in order of dependency'''
         for i in range(self.D):
             for j in range(self.W):
-                if (i+j+self.offset)%2 == 0:
+                if (i+j+self.offset) % 2 == 0:
                     yield i, j

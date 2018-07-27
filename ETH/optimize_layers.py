@@ -3,7 +3,9 @@ from . import optimization as opt
 from .basic import trace2
 from .layers.layers_dense import LayersDense
 
-#@profile
+# @profile
+
+
 def minimizeVarE_cycle(Y, E=0, forward=True):
     if E:
         H2 = Y.H2-(2*E)*Y.H+E**2*np.eye(*Y.H.shape)
@@ -21,6 +23,7 @@ def minimizeVarE_cycle(Y, E=0, forward=True):
             l.append(varE)
     return np.array(l)
 
+
 def minimizeVar_cycle(Y, forward=True):
     l = []
     if forward:
@@ -34,6 +37,7 @@ def minimizeVar_cycle(Y, forward=True):
             l.append(var)
     return np.array(l)
 
+
 def minimizeVar(Y, n=100, rel=1e-10):
     last = np.inf
     for i in range(n):
@@ -41,8 +45,9 @@ def minimizeVar(Y, n=100, rel=1e-10):
         print(i, cur)
         if last-cur < rel*cur:
             break
-        last=cur
+        last = cur
     return cur
+
 
 def minimize_local(H, rho, D=4, dim=2, n=100, rel=1e-6):
     Y = LayersDense(rho, H, D=D, dim=dim)
@@ -52,7 +57,7 @@ def minimize_local(H, rho, D=4, dim=2, n=100, rel=1e-6):
         print(i, l)
         if last-l[-1] < rel*l[-1]:
             break
-        last=l[-1]
+        last = l[-1]
     print("Exit at {}".format(i))
     return Y.contract_rho()
 
@@ -64,7 +69,7 @@ if __name__ == "__main__":
     d = 2   # At least 2**(2(n-2))
     arg_tpl = {"n": n, "delta": 0.54, "g": 0.1}
     H = Hamilton_XZ(n)['H']
-    #print(H)
+    # print(H)
     rho = Rho.rho_even(n, n/2, amp=0, rs=np.random)
     print(rho)
     Y = LayersDense(Rho.product_rho(rho), H, D=d)

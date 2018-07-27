@@ -13,10 +13,12 @@ rho = rand_rotate(rho)
 V = np.einsum('jk, li->ijkl', rho, H)
 V2 = np.einsum('jk, li->ijkl', rho, H2)
 
+
 def test_local_optimization():
     U, got = opt.minimize_quadratic_local(V2, nit=200)
     expected = opt.min_expect(rho, H2)
     assert abs(expected - got) < 1e-6
+
 
 def meta_test_df(df, f, eps):
     M, f1, f2 = df
@@ -26,14 +28,16 @@ def meta_test_df(df, f, eps):
     f1_mean = (f1_r+f1_l)/2
     f2_num = (f1_r-f1_l)/eps
     print(f1_l, f1_r, f1, f2, f2_num)
-    assert abs(f1_mean - f1)<eps
-    assert abs(f2_num - f2)<10*np.sqrt(eps)*max(abs(f2), 1)
+    assert abs(f1_mean - f1) < eps
+    assert abs(f2_num - f2) < 10*np.sqrt(eps)*max(abs(f2), 1)
+
 
 def test_df_quadratic():
     df = opt.df_quadratic_local(V2)
     f = partial(opt.f_quadratic_local, V2)
     eps = 1e-6
     meta_test_df(df, f, eps)
+
 
 def test_df_var():
     df = opt.df_var_local(V, V2)

@@ -2,13 +2,15 @@ from .layers import Layers
 import numpy as np
 from functools import reduce
 
+
 def ud2rl(U):
     '''
     Up-down convention to right-left convention
                         0 1    2 0
     Convert convention  2 3 to 3 1
     '''
-    return U.reshape((2,)*4).transpose([1,3,0,2]).reshape(4, 4)
+    return U.reshape((2,)*4).transpose([1, 3, 0, 2]).reshape(4, 4)
+
 
 def rl2ud(U):
     '''Inverse of ud2rl
@@ -16,19 +18,21 @@ def rl2ud(U):
                         2 0    0 1
     Convert convention  3 1 to 2 3
     '''
-    return U.reshape((2,)*4).transpose([2,0,3,1]).reshape(4, 4)
+    return U.reshape((2,)*4).transpose([2, 0, 3, 1]).reshape(4, 4)
+
 
 from DMRG.spin import sigma
 # Pauli Matrices
 I, X, Y, Z = sigma
 # Zero Matrix
-O = np.zeros([2,2])
+O = np.zeros([2, 2])
+
 
 def MPO_TL(J=1, g=1, h=1):
     '''$H=-\sum J Z_iZ_{i+1}+\sum (gX_i+hZ_i)$
     NOTE The matrix of operators is upper-triangle after transosition
     '''
-    L = g*X+h*Z # local terms
+    L = g*X+h*Z  # local terms
     LZ = (L@Z+Z@L)/2
     mpo = np.array([
         [I,     O,      O,      O,      O,      O],
@@ -37,16 +41,17 @@ def MPO_TL(J=1, g=1, h=1):
         [Z@Z,   O,      O,      O,      O,      O],
         [LZ,   -J*Z@Z,  Z,      O,      O,      O],
         [L@L,  -2*J*LZ, 2*L,  J*J*Z@Z,  -2*J*Z,  I],
-        ]).transpose([1,0,2,3])
+    ]).transpose([1, 0, 2, 3])
     return mpo[:3, :3], mpo
+
 
 def transform(op, U, i):
     '''i is the index of slot. If i>0 the starting shape is 2**i, if i<0, op.size*s**i
        <-i->U
     op ------------
-    
+
     '''
-    if i>= 0:
+    if i >= 0:
         start = 2**i
     else:
         start = op.size//2**(-i)
@@ -61,13 +66,15 @@ def transform(op, U, i):
         op = op.reshape([start, U.shape[0], -1])
         return np.einsum('ij,kjl->kil', U, op)
 
+
 def dagger(U):
     '''
     i j   ---\  j i *
     k l   ---/  l k
     '''
-    U = U.reshape((2,)*4).transpose([1,0,3,2])
+    U = U.reshape((2,)*4).transpose([1, 0, 3, 2])
     return U.reshape(4, 4).conj()
+
 
 class LayersMPO(Layers):
     def __init__(self, rho, H, D, W, H2, offset=0):
@@ -95,12 +102,13 @@ class LayersMPO(Layers):
         N_legs = 2*(self.W-1)+1
         # n_delta is number of deltas in one side
         # n_mid is number of legs binded to MPO
-        #print(())
+        # print(())
         assert row in [0, -1], "Invalid init operator in the middle"
         space = not((row, 0) in self)
         n_delta, n_mid = divmod(N_legs-2*space, 4)
-        s = [*("δ")*n_delta,str(n_mid),*("δ")*n_delta]
-        if space: s = ["ρ"]+s+["ρ"]
+        s = [*("δ")*n_delta, str(n_mid), *("δ")*n_delta]
+        if space:
+            s = ["ρ"]+s+["ρ"]
         print("{} Legs, {} gap:\t".format(N_legs, int(space)), *s)
         deltas = reduce(np.kron, (1,)+(np.eye(2).flatten(),)*n_delta)
         if n_mid == 1:
@@ -108,7 +116,7 @@ class LayersMPO(Layers):
             mid[row] = 1
         else:
             mpo_ = mpo[0] if row == 0 else mpo[:, -1]
-            mid = mpo_.transpose([1, 0, 2]).flatten()#TODO 1,2 or 2,1
+            mid = mpo_.transpose([1, 0, 2]).flatten()  # TODO 1,2 or 2,1
         op = np.kron(np.kron(deltas, mid), deltas)
         if space:
             op = np.einsum('i, jk->kij', op, self.rho[row]).flatten()
@@ -146,7 +154,8 @@ class LayersMPO(Layers):
             #   2 3           3 0
             # 0 +++ 1  -->  4 +++ 1
             #   4 5           5 2
-            combo = combo.transpose([3,1,5,2,0,4]).reshape(mpo.shape[0]*4, -1)
+            combo = combo.transpose(
+                [3, 1, 5, 2, 0, 4]).reshape(mpo.shape[0]*4, -1)
             if rhs:
                 combo = combo.T
             return transform(op, combo, ind[1]-1)
@@ -157,6 +166,7 @@ class LayersMPO(Layers):
             op = transform(op, R, ind[1]-1)
             op = transform(op, dagger(R), -ind[1]-1)
             return op
+
     def contract_hole(self, ind, l, r, mpo):
         R = self[ind]
         if self.W-1 == 0:
@@ -165,8 +175,8 @@ class LayersMPO(Layers):
             #print("contract rho")
             '''Contract rho and then apply'''
             # contract dagger(U) rho U, and apply to -ind[1]-1
-            l = l.reshape(2,-1,2)
-            r = r.reshape(2,-1,2)
+            l = l.reshape(2, -1, 2)
+            r = r.reshape(2, -1, 2)
             lr_holes = np.einsum('imk, jml->ijkl', l, r)
             return np.einsum('ijkl, ab, cd->bdijackl').reshape([4]*4)
         elif ind[1] == self.W-1:
@@ -176,17 +186,17 @@ class LayersMPO(Layers):
             lr = int(sqrt(l.size/c))
             l = l.reshape([lr, 2, -1, 2, lr])
             r = r.reshape([lr, 2, -1, 2, lr])
-            hole = np.einsum('ijklm,inopm,koqrst->jqnrlspt', l, r, dmpo)#???
+            hole = np.einsum('ijklm,inopm,koqrst->jqnrlspt', l, r, dmpo)  # ???
             return hole
         else:
             l = l.reshape([lr, 2, -1, 2, lr])
-            
+
     def contract_list(self, inds, op, mpo, rhs=False):
         if rhs:
             for i in inds[::-1]:
                 op = self.apply_pair(i, op, mpo, True)
         else:
-            #print(op.flatten())
+            # print(op.flatten())
             for i in inds:
                 op = self.apply_pair(i, op, mpo)
                 #print(i, op.flatten())
@@ -219,18 +229,21 @@ class LayersMPO(Layers):
                 yield j, L[-1], R[-1]
                 L.pop()
                 R.append(self.apply_pair(j, R[-1], mpo, True))
+
+
 if __name__ == "__main__":
     from ETH import Rho
     from numpy.random import RandomState
     l = 4
-    rho = Rho.rho_even(l, l/2, amp=0.4, rs=RandomState(123581321))# [np.array([[0.7,0],[0,0.3]]) for i in range(l)]
+    # [np.array([[0.7,0],[0,0.3]]) for i in range(l)]
+    rho = Rho.rho_even(l, l/2, amp=0.4, rs=RandomState(123581321))
     H, H2 = MPO_TL(J=1, g=1, h=1)
     L = LayersMPO(rho, H, 2, l-1, H2, offset=0)
     Left = L.init_operator(H, row=0)
     #print(L.apply_pair((0,0), Left, H).flatten())
     print("Final", L.contract_all(L.H).real)
     h = [np.einsum('ijkl, lk->ij', H, r) for r in rho]
-    print(reduce(np.matmul, h)[0,-1].real)
+    print(reduce(np.matmul, h)[0, -1].real)
     print("MPO 1", np.einsum("i, jk->kij", h[0][0], rho[1]).flatten())
     #print(np.einsum("ijk, kj, lm->mil", H[0], rho[0], rho[1]).flatten())
     #print("MPO 2", np.einsum("i, iklm->klm", (h[0]@h[1])[0], H).transpose([1,0,2]).flatten())

@@ -1,5 +1,7 @@
 from .layers import Layers
 import numpy as np
+
+
 def transform(op, U, sh0):
     '''Transform operator op with single U_{ij} to slots determined
     by sh0
@@ -7,11 +9,24 @@ def transform(op, U, sh0):
         + op    operator to be transformed
         + U     Unitary transformation, should be a square matrix
         + sh0   zeroth elem of shape, determines starting slot
+    Return:
+        The operator after transformation
     '''
     return np.einsum("ij, kjl->kil", U, op.reshape(sh0, U.shape[0], -1))
 
+
 class LayersDense(Layers):
+    '''Density matrix and observables are represented in full form (having shape 2^L by 2^L)
+    Important conventions or notes:
+    + Unitaries are plugged into rho and H as tr[U rho U^+ H]
+    + 
+    '''
+
     def __init__(self, rho, H=None, D=4, dim=2, H2=None):
+        '''
+        Args:
+            rho     Density matrix
+        '''
         self.rho = rho
         self.H = H
         if H2 is None:
@@ -71,7 +86,7 @@ class LayersDense(Layers):
             op2 = self.apply_single(ind, op2, hc=hc)
         return np.einsum('lonipk, ijklmn->mopj', op1.reshape(sh), op2.reshape(sh))
 
-    #@profile
+    # @profile
     def contract_naive(self, H, i):
         '''Contract lower part of U to rho, upper part to H
         Only for testing purpose'''

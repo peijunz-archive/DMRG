@@ -9,12 +9,13 @@ import numpy as np
 import scipy.linalg as la
 import pytest
 
-@pytest.mark.parametrize("n", [2, 3])#, 4])
+
+@pytest.mark.parametrize("n", [2, 3])  # , 4])
 @pytest.mark.parametrize("k", [0.3, 0.7])
 def test_small_chain_varE(n, k, nit=50):
     '''Test function are really optimized'''
 
-    tol = {2:1e-6, 3:1e-2, 4:0.1}
+    tol = {2: 1e-6, 3: 1e-2, 4: 0.1}
     H = Hamilton_XZ(n)['H']
     rho = Rho.rho_prod_even(n, n*k, rs=np.random)
     mini = opt.exact_min_varE(H, rho)
@@ -22,12 +23,13 @@ def test_small_chain_varE(n, k, nit=50):
     last = np.inf
     for i in range(nit):
         l = minimizeVarE_cycle(Y)
-        assert all(l[:-1]+1e-6>=l[1:])
-        assert l[0] <= last +1e-6
+        assert all(l[:-1]+1e-6 >= l[1:])
+        assert l[0] <= last + 1e-6
         if last-l[-1] < tol[n]*max(l[-1], 1)/100:
             break
         last = l[-1]
-    assert abs(last-mini)<3*tol[n]*max(mini, 1), "Global minimum for varE not found"
+    assert abs(last-mini) < 3*tol[n]*max(mini,
+                                         1), "Global minimum for varE not found"
 
 
 @pytest.mark.parametrize("n", [2, 3, 4, 5, 6])
@@ -48,7 +50,9 @@ def test_local_H2(n, choice, k=0.5, d=2, tol=1e-4):
         if last-l[-1] < tol*l[-1]/100:
             break
         last = l[-1]
-    assert abs(last-mini)<3*tol*abs(max(mini, 1)), "Global minimum for local Hamiltonian not found"
+    assert abs(last-mini) < 3*tol*abs(max(mini, 1)
+                                      ), "Global minimum for local Hamiltonian not found"
+
 
 @pytest.mark.parametrize("n", [2, 3, 4])
 @pytest.mark.parametrize("k", [0.3, 0.7])
@@ -61,7 +65,7 @@ def test_reverse_engineering(n, k, nit=50, tol=1e-4):
     rho = np.sort(np.diag(Rho.rho_prod_even(n, n*k)))[::-1]
     rho = v@np.diag(rho)@v.T.conj()
     mini = opt.min_expect(H2, rho)
-    assert abs(trace2(rho, H2) - mini)<1e-6
+    assert abs(trace2(rho, H2) - mini) < 1e-6
     Y = LayersDense(rho, H2=H2, D=3)
     for ind in Y.indices:
         Y[ind] = rand_unitary([4, 4], amp=0.1)
@@ -76,12 +80,13 @@ def test_reverse_engineering(n, k, nit=50, tol=1e-4):
             break
         last = l[-1]
     print("Last", i, last, l)
-    assert abs(last-mini)<3*tol*abs(max(mini, 1)), "Global minimum for local Hamiltonian not found"
+    assert abs(last-mini) < 3*tol*abs(max(mini, 1)
+                                      ), "Global minimum for local Hamiltonian not found"
 
 
 def back_symmetry():
     '''Asymetric?'''
-    n=8
+    n = 8
     k = 0.5
     H = Hamilton_XZ(n)['H']
     rho = Rho.rho_prod_even(n, n*k, rs=np.random)
@@ -93,4 +98,4 @@ def back_symmetry():
     for i in range(2):
         l1 = minimizeVarE_cycle(Y)
         l2 = minimizeVarE_cycle(Y, forward=False)
-        assert la.norm(l1-l2)<1e-2*la.norm(l1)
+        assert la.norm(l1-l2) < 1e-2*la.norm(l1)

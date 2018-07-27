@@ -53,8 +53,10 @@ def product_rho(L, s=None):
     else:
         return np.diag(rho_entropy(rho, s))
 
+
 def rho_prod_even(n, s, amp=1, rs=None):
     return product_rho(rho_even(n, s, amp, rs))
+
 
 def rho_even(n, s=0, amp=None, rs=None):
     s1 = s / n
@@ -72,6 +74,7 @@ def rho_even(n, s=0, amp=None, rs=None):
     else:
         return [np.diag([x, 1 - x])] * n
 
+
 def compare_segm(r1, r2, start, end):
     if start >= end:
         return np.nan
@@ -81,6 +84,7 @@ def compare_segm(r1, r2, start, end):
     t2 = np.einsum('ijkilk->jl', r2.reshape(sh))
     return la.norm(t1-t2)**2
 
+
 def compare_all(r1, r2):
     n = int(np.round(np.log2(r1.shape[0])))
     res = np.empty([n, n])
@@ -88,6 +92,7 @@ def compare_all(r1, r2):
         for j in range(n):
             res[i, j] = compare_segm(r1, r2, i, j+1)
     return res
+
 
 def compare(rho1, rho2):
     '''Compare density matrix by trace out different degree

@@ -7,13 +7,13 @@ trace2 = partial(np.einsum, "ij, ji")
 
 def xlog2(x):
     '''Robust x*log_2(x) that does not diverge at 0'''
-    return x * (np.log2(x+(x==0)))
+    return x * (np.log2(x+(x == 0)))
 
 
 def entropy(r):
     '''Entropy in bit'''
     r = r/np.sum(r)
-    return -sum(r * (np.log2(r + (r==0))))
+    return -sum(r * (np.log2(r + (r == 0))))
 
 
 def commuteh(h1, h2):
@@ -29,6 +29,7 @@ def energy_var(H, rho, H2=None):
         H2 = H@H
     res = trace2(H2, rho) - trace2(H, rho)**2
     return res.real
+
 
 def rand_unitary(shape, amp=1, rs=np.random):
     '''Generate random unitary matrix
@@ -52,7 +53,7 @@ def bitsign(x):
         +1  for positive numbers
         -1  for negative numbers
     '''
-    return 1 - (np.signbit(x)<<1)
+    return 1 - (np.signbit(x) << 1)
 
 
 def mlinspace(n):
