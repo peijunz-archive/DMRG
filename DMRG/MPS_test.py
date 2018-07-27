@@ -5,6 +5,7 @@ from .MPS import MPS
 from .spin import sigma
 from . import AKLT as ak
 
+
 class TestMPS(unittest.TestCase):
     def testCanon(self):
         '''Test unity of state and circle matrix s'''
@@ -56,11 +57,12 @@ class TestMPS(unittest.TestCase):
         E = ak.Energy(s)
         self.assertAlmostEqual(E/(N-1), -2/3)
         s.canon()
-        n=5
+        n = 5
         l1 = ak.evolve(s, n=n, time=1, k=10)
         l2 = np.exp(-1j*E*(np.arange(n)+1))
         np.testing.assert_allclose(l1, l2)
         ak.correlator(s)
+
 
 if __name__ == "__main__":
     unittest.main()

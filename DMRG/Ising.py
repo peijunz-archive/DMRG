@@ -1,4 +1,4 @@
-"""Ising Model Hamiltonian Template Generator
+"""Ising Model Hamiltonian Generator
 
 Tools to generate n-nearest interaction Hamiltonian.
 """

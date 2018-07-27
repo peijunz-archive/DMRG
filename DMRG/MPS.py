@@ -10,6 +10,7 @@ import copy
 from . import ST
 from typing import List
 
+
 def truncate(s, trun, err):
     """
     Truncate s based on trun or err, whichever results in smaller bond dimension.
@@ -347,12 +348,13 @@ class MPS:
                 inner product
         """
         assert self.dim == rhs.dim, "Shape conflict between states"
-        E = np.einsum('lcr, lcj->rj', self.block_single(0).conj(), rhs.block_single(0))
+        E = np.einsum('lcr, lcj->rj', self.block_single(0).conj(),
+                      rhs.block_single(0))
         for i in range(1, self.L):
             E = np.einsum('kl, kno, lnr->or', E, self.B(i).conj(), rhs.B(i))
         return np.trace(E)
 
-    #@profile
+    # @profile
     def corr(self, *ops):
         """Correlation function of operators
 
@@ -377,11 +379,13 @@ class MPS:
         start, end = min(D.keys()), max(D.keys())+1
         E = np.diag(self.Sl[start]**2)
         for i in range(start, end):
-            b=self.B(i)
+            b = self.B(i)
             if i in D:
-                E = np.einsum('kl, kio, ij, ljr->or', E, b.conj(), D[i], b, optimize=False)
+                E = np.einsum('kl, kio, ij, ljr->or', E,
+                              b.conj(), D[i], b, optimize=False)
             else:
-                E = np.einsum('kl, kio, lir->or', E, b.conj(), b, optimize=False)
+                E = np.einsum('kl, kio, lir->or', E,
+                              b.conj(), b, optimize=False)
         return np.trace(E).real
 
     def measure(self, start, op, Hermitian=True):
@@ -405,7 +409,7 @@ class MPS:
         ret = np.einsum('abd, aed, be', s, s.conj(), op, optimize=False)
         return ret.real if Hermitian else ret
 
-    #@profile
+    # @profile
     def update_single(self, U, i, unitary=True):
         """Single site update
         Args:
@@ -420,7 +424,7 @@ class MPS:
         if not unitary:
             self.ortho_left_site(i)
 
-    #@profile
+    # @profile
     def update_double(self, U, i, unitary=True):
         """Double site update
         Args:
@@ -441,7 +445,8 @@ class MPS:
         mb = np.einsum('lcr, rjk, abcj->labk', self.B(i), self.B(i + 1), U)
         m = self.Sl[i][:, np.newaxis, np.newaxis, np.newaxis] * mb
         sh = m.shape
-        u, s, v = svd_truncate(m.reshape(sh[0] * sh[1], -1), self.trun, self.err)
+        u, s, v = svd_truncate(
+            m.reshape(sh[0] * sh[1], -1), self.trun, self.err)
         self.xr[i] = len(s)
         u = u.reshape(*sh[:2], -1)
         v = v.reshape(-1, *sh[2:])
@@ -469,12 +474,15 @@ class MPS:
         """
         def even_update(k):
             U = la.expm(-1j * H * k * t).reshape([self.dim] * 4)
+
             def _even_update():
                 for i in range(0, self.L - 1, 2):
                     self.update_double(U, i)
             return _even_update
+
         def odd_update(k):
             U = la.expm(-1j * H * k * t).reshape([self.dim] * 4)
+
             def _odd_update():
                 for i in range(1, self.L - 1, 2):
                     self.update_double(U, i)

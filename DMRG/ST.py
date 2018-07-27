@@ -1,37 +1,39 @@
-'''Suzuki Trotter Expansion
-'''
+'''Suzuki Trotter Expansion'''
+
 from typing import Tuple, List, Callable
 
 Taskline = List[Tuple[int, float]]
 Pipeline = List[Callable[[int], Callable]]
 
-def streamline(tasks:Taskline) -> Taskline:
+
+def streamline(tasks: Taskline) -> Taskline:
     '''
     Args:
         A list of which task should do how long time sequentially
     '''
     L = len(tasks)
-    i=-1
+    i = -1
     for j in range(L):
         if tasks[i][0] == tasks[j][0] and j:
             tasks[i][1] += tasks[j][1]
         else:
-            i+=1
+            i += 1
             tasks[i] = tasks[j].copy()
     return [tuple(t) for t in tasks[:i+1]]
 
-def do_tasks(tasks:Taskline, funs:Pipeline)->None:
+
+def do_tasks(tasks: Taskline, funs: Pipeline)->None:
     '''
     Args:
         funs    A list of callable generator to apply operators'''
     tasks = streamline(tasks)
     '''Generate a list of callables from funs'''
-    ready = {t:funs[t[0]](t[1]) for t in set(tasks)}
+    ready = {t: funs[t[0]](t[1]) for t in set(tasks)}
     for task in tasks:
         ready[task]()
 
 
-def ST1_tasks(L:int, n:int)->Taskline:
+def ST1_tasks(L: int, n: int)->Taskline:
     '''First Order Suzuki Trotter Expansion
     Args:
         L:  Number of operators
@@ -41,7 +43,8 @@ def ST1_tasks(L:int, n:int)->Taskline:
     '''
     return [[i, 1./n] for i in range(L)]*n
 
-def ST2_tasks(L:int, n:int)->Taskline:
+
+def ST2_tasks(L: int, n: int)->Taskline:
     '''Second Order Suzuki Trotter Expansion
     Args:
         L:  Number of operators
@@ -49,11 +52,12 @@ def ST2_tasks(L:int, n:int)->Taskline:
     Return:
         A list of which task should do how long time sequentially
     '''
-    l= [[i, 0.5/n] for i in range(L)]
+    l = [[i, 0.5/n] for i in range(L)]
     l += l[::-1]
     return l*n
 
-def ST1(funs:Pipeline, n:int)->None:
+
+def ST1(funs: Pipeline, n: int)->None:
     '''Do functions by ST1 expansion
     Args:
         funs    A list of callable to apply operators
@@ -62,7 +66,8 @@ def ST1(funs:Pipeline, n:int)->None:
     '''
     do_tasks(ST1_tasks(len(funs), n), funs)
 
-def ST2(funs:Pipeline, n:int)->None:
+
+def ST2(funs: Pipeline, n: int)->None:
     '''Do functions by ST2 expansion
     Args:
         funs    A list of callable generator to apply operators

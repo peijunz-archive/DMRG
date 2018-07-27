@@ -16,7 +16,8 @@ op2 = dict(zip(('s0', 'sx', 'sy', 'sz'), sigma))
 
 
 class MPO:
-    '''x是行，y是列, op是算符。默认(0,0)和(n,n)有两个恒等算符'''
+    '''x is row，y is column, op is operator. By default there are identity operators
+    at (0,0) and (n,n)'''
     width = 4
     lazy = True
 

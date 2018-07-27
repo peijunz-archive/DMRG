@@ -52,13 +52,13 @@ def oneop(ops):
 def evolve(s, time=0.1, n=5, k=40):
     p = s.copy()
     l = []
-    Energy = np.abs(s.dot(p))
+    energy = np.abs(s.dot(p))
     for i in range(n):
         p.iTEBD_double(H, time, k)
         s.canon()
         print('Time {:.3f}, Overlap {:.5f}*exp({:.5f}j)'.format(
             (i + 1) * time, np.abs(s.dot(p)), np.angle(s.dot(p))))
-        assert abs(Energy - np.abs(s.dot(p))) < 1e-6, "Not eigenstate?"
+        assert abs(energy - np.abs(s.dot(p))) < 1e-6, "Not eigenstate?"
         l.append(s.dot(p))
     return l
 
