@@ -16,8 +16,18 @@ op2 = dict(zip(('s0', 'sx', 'sy', 'sz'), sigma))
 
 
 class MPO:
-    '''x is row，y is column, op is operator. By default there are identity operators
-    at (0,0) and (n,n)'''
+    '''
+    Attributes
+    --------
+    x: list
+        list of row index
+    y: list
+        list of col index
+    op: list
+        List of operators. By default there are identity operators at (0,0) and (n,n)
+    name: List[str]
+        List of strings corresponds to operators in op
+    '''
     width = 4
     lazy = True
 
@@ -135,3 +145,11 @@ class MPO:
 
     def copy(self):
         return copy.deepcopy(self)
+
+if __name__ == "__main__":
+    '''Consider Hamiltonian $H=H_0+H_1+H_2$ where $H_0=\sum A$ is one site,
+    $H_1=\sum B_i\otimes C_{i+1}$ for nearest product, and
+    $H_2=\sum D_{i}\otimes E_{i+2}$ for subnearest product,
+    i.e. $$\sum A_i+\sum B_{i}\otimes C_{i+1}+\sum D_{i-1}\otimes 1_i\otimes F_{i+1}$$
+    '''
+    print(MPO('A')+MPO('B')*MPO('C')+MPO('D')*MPO('1')*MPO('E'))

@@ -70,6 +70,7 @@ if __name__ == "__main__":
     L = np.array([[[0, 0, 1]]])
     R = np.array([[[1, 0, 0]]])
 
+    """The chain length increase by two in every iteration"""
     for i in range(40):
         L, R, val = next_LR(L, R, M)
         print('Energy {} is'.format(2 * i + 2), val / (i * 2 + 2))
