@@ -72,6 +72,7 @@ def Ztj(s, t, n=50):
     delta = np.diff([0, *t])
     l = []
     for d in delta:
+        print(d)
         s.iTEBD_double(H, d, n)
         l.append(Z(s))
     l = np.array(l).real

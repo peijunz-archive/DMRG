@@ -6,7 +6,7 @@ trace2 = partial(np.einsum, "ij, ji")
 
 
 def xlog2(x):
-    """:math:`x\\log_2(x)`
+    """:math:`x\log_2(x)`
 
     Args
     -----

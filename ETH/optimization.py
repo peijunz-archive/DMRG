@@ -7,7 +7,7 @@ from functools import partial
 from itertools import permutations
 
 
-'''Global parts'''
+'''Global optimization'''
 
 
 def gradient(H, rho, H2=None, err=0):
@@ -216,6 +216,9 @@ def minimize_var_local(V, V2, U=None, nit=10, meps=1):
     return U, f
 
 
+'''Exact min solutions'''
+
+
 def exact_min_var(H, rho):
     if max(H.shape) > 8:
         return np.zeros(1)
@@ -232,9 +235,6 @@ def exact_min_var(H, rho):
         # if all(dE2 == sorted(dE2)):
         mins[var] = l[np.argsort(dE2[::-1])]
     return mins
-
-
-'''Exact min solutions'''
 
 
 def min_expect(rho, H2):
