@@ -1,0 +1,23 @@
+\documentclass{article}
+\usepackage{zpj}
+\begin{document}
+\title{Wigner Operator in Fock Space}
+\author{Peijun Zhu}
+\maketitle
+
+The Wigner operator is defined as
+\begin{align}
+		W(\alpha)&=D(\alpha)PD(-\alpha)\\
+		D(\alpha)&=\exp[\alpha a^\dagger-\alpha^*a]\\
+		P&=\exp(\ii\pi N)=(-1)^N
+\end{align}
+It is obvious that $PP^\dagger=P^2=1$. As $[N, a^\dagger]=a^\dagger$, we apply Baker-Hausdroff's formula to get
+\begin{align}
+	Pa^\dagger P&=\exp(\ii \pi N) a^\dagger \exp(-\ii \pi N)=-a^\dagger\\
+	PaP&=-a\\
+	PD_\alpha P&=D_{-\alpha}
+\end{align}
+Finally we have
+$$D_\alpha PD_{-\alpha}=P(PD_\alpha P)D_{-\alpha}=PD_{-2\alpha}=(-1)^Ne^{-2|\alpha|^2}e^{-2\alpha a^\dagger}e^{2\alpha^*a},$$
+where $e^{-2\alpha a^\dagger}$ is lower triangular and $e^{2\alpha^*a}$ is upper triangular. This expression is  now handy to evaluate in Fock space.
+\end{document}
