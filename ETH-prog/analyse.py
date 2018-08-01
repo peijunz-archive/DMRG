@@ -89,19 +89,6 @@ def diff_gibbs(rho, H):
     m=Rho.compare_all(rho, grho)
     return m
 
-def plot_diff(diffs, args_H, s, D, vmax=1):
-    w = len(diffs)
-    fig, ax = plt.subplots(1, w, figsize=(w*2+1, 3), sharey=True);
-    plt.subplots_adjust(top=0.8)
-    for i in range(w):
-        bar = ax[i].imshow(diffs[i], vmin=0, vmax=vmax);
-        ax[i].set_title('S/L={:5.3f}'.format(s[i]))
-    #plt.subplots_adjust(wspace=0.1)
-    fig.colorbar(bar, ax=ax.ravel().tolist(), orientation='horizontal', aspect=50);
-    fig.suptitle('Difference between density matrix of Local optimization and Gibbs ensemble. (L={n}, J={J}, h={h}, g(μ, Δ)={g}, depth={D})'.format(D=D, **args_H))
-    info = "L{n}_J{J}_h{h}_g{g}".format(**args_H)
-    #plt.savefig(info+".pdf")
-
 def plot_diff_rho(diffs, vars, args_H, s, D):
     pass
 
