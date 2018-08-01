@@ -6,23 +6,96 @@ from .basic import *
 from functools import partial
 from itertools import permutations
 
+###
+#
+# Global optimization
+#
+###
 
-'''Global optimization'''
+def grad_single(h, rho):
+    """gradient of tr[U rho U^+ h], U=exp(ixM)
 
+    Please refer to "doc/global_optimization"
 
-def gradient(H, rho, H2=None, err=0):
-    '''The gradient for rho'=exp(ih)@rho@exp(ih)
+    Args
+    ---
+        h: np.ndarray
+            Hermitian operator
+        rho: np.ndarray
+            Density matrix
+    Returns
+    ---
+        M: np.ndarray
+            Gradient, the direction of optimization. M = i[rho, h]
+        f': np.float
+            First order derivative in M direction
+        f'': np.float
+            Second order derivative in M direction
+    """
+    M = 1j * commuteh(rho, h)
+    f1 = la.norm(M)**2
+    f2 = trace2(commuteh(M, rho), commuteh(M, h))
+    return M, f1.real, f2.real
 
-    $$\frac{df(H)}{dx}=g'(H^2)-2g(H)g'(H)=\tr[M^2]$$
+def gradient_simple(H, rho, H2=None):
+    """gradient of tr[U rho U^+ H^2] - tr[U rho U^+ H]^2, U=exp(ixM)
 
-    $$\frac{d^2f(H)}{dx^2}=g''(H^2)-2g'^2(H)-2g(H)g''(H)$$
-    '''
+    Please refer to "doc/global_optimization"
+
+    Args
+    ---
+        h: np.ndarray
+            Hermitian operator
+        rho: np.ndarray
+            Density matrix
+        H2: np.ndarray, optional
+            H^2
+    Returns
+    ---
+        M: np.ndarray
+            Gradient, the direction of optimization, M = i[rho, (H-E)^2]
+        f': np.float
+            First order derivative in M direction
+        f'': np.float
+            Second order derivative in M direction
+    """
+    if H2 is None:
+        H2=H@H
+    energy = trace2(rho, H)
+    dH2 = H2-(2*energy)*H
+    M = 1j*commuteh(rho, dH2)
+    f1 = trace2(M, M)
+    f2 = trace2(commuteh(M, rho), commuteh(M, dH2)) - 2*trace2(M, H)**2
+    return M, f1.real, f2.real
+
+def gradient_compound(H, rho, H2=None):
+    """gradient of tr[U rho U^+ H^2] - tr[U rho U^+ H]^2, U=exp(ixM), plus
+    i[rho, H] as the second direction to avoid saddle points
+
+    Please refer to "doc/global_optimization"
+
+    Args
+    ---
+        H: np.ndarray
+            Hermitian operator
+        rho: np.ndarray
+            Density matrix
+        H2: np.ndarray, optional
+            H^2
+    Returns
+    ---
+        M: np.ndarray
+            Directions of optimization: M_0 = i[rho, (H-E)^2], M_1 = i[rho, H]
+        nabla: np.ndarray
+            Vector pf first order derivatives
+        Hessian: np.ndarray
+            Hessian Matrix
+    """
     if H2 is None:
         H2 = H@H
     E = trace2(rho, H)
     h = H2 - (2 * E) * H
     M = np.array([1j * commuteh(rho, h), 1j * commuteh(rho, H)])
-    n = M.shape[0]
     l = la.norm(M, axis=(1, 2))
     M /= l.reshape(-1, 1, 1)
     scale = l[0]
@@ -32,6 +105,7 @@ def gradient(H, rho, H2=None, err=0):
     def _f2(m1, m2): return trace2(commuteh(m1, rho),
                                    commuteh(m2, h)).real - _f1(m1) * _f1(m2)
     nabla = np.array([_f1(m) for m in M])
+    n = M.shape[0]
     Hessian = np.empty([n, n], dtype='double')
     for i in range(n):
         Hessian[i, i] = _f2(M[i], M[i])
@@ -39,32 +113,28 @@ def gradient(H, rho, H2=None, err=0):
             Hessian[i, j] = Hessian[j, i] = _f2(M[i], M[j])
     return M, nabla, Hessian
 
-# @profile
 
+def minimize_rho(rho, f, df, max_step=0.5, nit=100):
+    """Minimize observable function f of rho, by applying unitaries to rho
 
-def grad2(h, rho):
-    M = 1j * commuteh(rho, h)
-    f1 = la.norm(M)**2
-    f2 = trace2(commuteh(M, rho), commuteh(M, h))
-    return M, f1.real, f2.real
-
-# @profile
-
-
-def expm2_ersatz(h):
-    I = np.eye(*h.shape)
-    # Better version of
-    #U = (I+h)@la.inv(I-h)
-    U = np.linalg.solve(I - h, I + h)
-    # print(U@U.T.conj())
-    return U
-
-# @profile
-
-
-def minimize_rho(rho, f, df, meps=0.5, nit=100, err=0):
-    '''Add criteria for optimization'''
-    istep = 1 / meps
+    Args
+    ----
+        rho: np.ndarray
+            Density Matrix
+        f: Callable[[np.ndarray], float]
+        df: Callable[[np.ndarray], [np.ndarray, float, float]]
+            It returns optimization directions, f'(or gradients), f''(or Hessian)
+        max_step: float
+            Max step size for optimization
+        nit: int
+            Number of optimization cycles
+        err: float
+    Returns
+    ----
+        rho: np.ndarray
+            "Optimal" Density matrix
+    """
+    istep = 1 / max_step
     cur = np.inf
     for i in range(nit):
         M, nabla, hessian = df(rho)
@@ -76,7 +146,7 @@ def minimize_rho(rho, f, df, meps=0.5, nit=100, err=0):
         f1 = la.norm(nabla)
         convex = all(w >= 0)
         for j in range(10):
-            U = expm2_ersatz((1j / 2**j) * M_opt)
+            U = expm_((1j / 2**j) * M_opt)
             rho_try = U@rho@U.T.conj()
             nxt = f(rho_try)
             if nxt < cur or (f1 == 0):
@@ -84,43 +154,59 @@ def minimize_rho(rho, f, df, meps=0.5, nit=100, err=0):
                 rho = rho_try
                 break
         #print(cur, nabla, hessian)
-        if ((i * 10 > nit) and j == 9):  # or (f1 < err and convex):
+        if ((i * 10 > nit) and j == 9):
             break
     print("Stop at {} with f={}, f1={}, convex={}".format(i, cur, f1, convex))
     return rho
 
 
-def minimize_var_fix(H, rho, E, meps=10, nit=100, err=0):
+def minimize_var_displace(H, rho, E, max_step=10, nit=100):
+    """Minimize variance with fixed energy displacement"""
     Delta = H - E * np.eye(*H.shape)
     h = Delta@Delta
 
     def f(r): return trace2(h, r).real
-    df = partial(grad2, h)
-    return minimize_rho(rho, f, df, meps, nit, err)
+    df = partial(grad_single, h)
+    return minimize_rho(rho, f, df, max_step, nit, err)
 
 
-def minimize_var_nfix(H, rho, meps=10, nit=100, err=0):
+def minimize_variance(H, rho, max_step=10, nit=100):
+    """Minimize variance without fixing energy"""
     H2 = H@H
     f = partial(energy_var, H, H2=H2)
     # f = lambda r: trace2(r, H2).real-trace2(r, H).real**2
-    df = partial(gradient, H, H2=H2, err=err)
-    return minimize_rho(rho, f, df, meps, nit, err)
+    df = partial(gradient_compound, H, H2=H2, err=err)
+    return minimize_rho(rho, f, df, max_step, nit, err)
 
 
-def minimize_var(H, rho, E=None, meps=10, n=100, rel=0):
+def minimize_var(H, rho, E=None, max_step=10, n=100, rel=0):
+    """Minimize variance
+
+    Args
+    ---
+        H: np.ndarray
+            Hermitian observable
+        rho: np.ndarray
+            density matrix
+        E:
+            None or fixed energy displacement
+        max_step: np.float
+        n: int
+        rel:
+    """
     if E is None:
-        return minimize_var_nfix(H, rho, meps=meps, nit=n, err=rel)
+        return minimize_variance(H, rho, max_step=max_step, nit=n, err=rel)
     else:
-        return minimize_var_fix(H, rho, E, meps=meps, nit=n, err=rel)
+        return minimize_var_displace(H, rho, E, max_step=max_step, nit=n, err=rel)
 
 
-'''Local Code'''
+"""Local Code"""
 
 
-def improve(_grad, _f, meps):
-    '''Single step of Steepest descent algorithm'''
+def improve(_grad, _f, max_step):
+    """Single step of Steepest descent algorithm"""
     M, f1, f2 = _grad
-    istep = 1 / meps
+    istep = 1 / max_step
     orig = _f()  # np.einsum('iijj', V).real
     step = - bitsign(f1) / np.clip(f2 / np.abs(f1), istep, None)
     for i in range(4):
@@ -166,13 +252,13 @@ def df_quadratic_local(V):
     return M, f1, f2
 
 
-def minimize_quadratic_local(V, U=None, nit=10, meps=1):
-    '''Optimize <H^2>'''
+def minimize_quadratic_local(V, U=None, nit=10, max_step=1):
+    """Optimize <H^2>"""
     if U is None:
         U = np.eye(4)
     for i in range(nit):
         du, f = improve(df_quadratic_local(
-            V), partial(f_quadratic_local, V), meps)
+            V), partial(f_quadratic_local, V), max_step)
         if du is None:
             break
         V = np.einsum('ijkl, ip, ql->pjkq', V, du, du.T.conj())
@@ -200,13 +286,13 @@ def df_var_local(V, V2):
     return M, f1, f2
 
 
-def minimize_var_local(V, V2, U=None, nit=10, meps=1):
-    '''minimize <H^2>-<H>^2'''
+def minimize_var_local(V, V2, U=None, nit=10, max_step=1):
+    """minimize <H^2>-<H>^2"""
     if U is None:
         U = np.eye(4)
     for i in range(nit):
         #print(df_var_local(V, V2))
-        du, f = improve(df_var_local(V, V2), partial(f_var_local, V, V2), meps)
+        du, f = improve(df_var_local(V, V2), partial(f_var_local, V, V2), max_step)
         if du is None:
             break
         V = np.einsum('ijkl, ip, ql->pjkq', V, du, du.T.conj())
@@ -216,7 +302,7 @@ def minimize_var_local(V, V2, U=None, nit=10, meps=1):
     return U, f
 
 
-'''Exact min solutions'''
+"""Exact min solutions"""
 
 
 def exact_min_var(H, rho):
