@@ -82,20 +82,3 @@ def test_reverse_engineering(n, k, nit=50, tol=1e-4):
     print("Last", i, last, l)
     assert abs(last-mini) < 3*tol*abs(max(mini, 1)
                                       ), "Global minimum for local Hamiltonian not found"
-
-
-def back_symmetry():
-    '''Asymetric?'''
-    n = 8
-    k = 0.5
-    H = Hamilton_XZ(n)['H']
-    rho = Rho.rho_prod_even(n, n*k, rs=np.random)
-    rho2 = rand_rotate(rho)
-    Y = LayersDense(rho, rho, D=3)
-    Y.H2 = rho2
-    Y2 = LayersDense(rho2, rho, D=3)
-    Y2.H2 = rho
-    for i in range(2):
-        l1 = minimizeVarE_cycle(Y)
-        l2 = minimizeVarE_cycle(Y, forward=False)
-        assert la.norm(l1-l2) < 1e-2*la.norm(l1)
